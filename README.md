@@ -232,7 +232,7 @@ This project is licensed under the GPL v2 or later - see the [LICENSE](LICENSE) 
 
 ## Credits
 
-**Developed by:** [Your Name]
+**Developed by:** Matthew Cowan
 
 **Inspired by:** Beautiful typography and the amazing work of type designers like Alejandro Paul
 
@@ -243,7 +243,7 @@ This project is licensed under the GPL v2 or later - see the [LICENSE](LICENSE) 
 
 ## Support
 
-- **Documentation**: [Link to docs]
+- **Documentation**: [Link to docs, someday]
 - **Issues**: [GitHub Issues](https://github.com/yourusername/headline-ligatures-styles/issues)
 - **WordPress.org**: [Plugin Page](https://wordpress.org/plugins/headline-ligatures-styles/)
 
