@@ -1,0 +1,38 @@
+{
+  "name": "headline-ligatures-styles",
+  "version": "1.0.0",
+  "description": "WordPress plugin for advanced OpenType typography features in Gutenberg headlines",
+  "scripts": {
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "npm run build:js:editor && npm run build:js:admin",
+    "build:js:editor": "babel assets/js/block-editor.js --out-file assets/js/block-editor.min.js",
+    "build:js:admin": "terser assets/js/admin-page.js --compress --mangle --output assets/js/admin-page.min.js",
+    "build:css": "npm run build:css:editor && npm run build:css:frontend && npm run build:css:admin",
+    "build:css:editor": "cleancss -o assets/css/block-editor.min.css assets/css/block-editor.css",
+    "build:css:frontend": "cleancss -o assets/css/frontend.min.css assets/css/frontend.css",
+    "build:css:admin": "cleancss -o assets/css/admin-page.min.css assets/css/admin-page.css",
+    "watch": "npm run watch:js & npm run watch:css",
+    "watch:js": "nodemon --watch assets/js --ext js --exec \"npm run build:js\"",
+    "watch:css": "nodemon --watch assets/css --ext css --exec \"npm run build:css\"",
+    "version": "npm run build"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "clean-css-cli": "^5.6.2",
+    "nodemon": "^2.0.20",
+    "terser": "^5.16.0"
+  },
+  "keywords": [
+    "wordpress",
+    "plugin",
+    "typography",
+    "opentype",
+    "ligatures",
+    "gutenberg"
+  ],
+  "author": "Your Name",
+  "license": "GPL-2.0-or-later"
+}

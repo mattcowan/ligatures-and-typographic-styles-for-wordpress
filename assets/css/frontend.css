@@ -1,0 +1,181 @@
+/**
+ * Frontend Styles for Headline Ligatures & Styles
+ * Ensures OpenType features render correctly on the frontend
+ */
+
+/* Base styling for elements with typography features */
+.hls-styled {
+    /* Features are applied via inline styles */
+    /* This class ensures proper rendering */
+    font-variant-ligatures: normal;
+    -webkit-font-feature-settings: inherit;
+    -moz-font-feature-settings: inherit;
+    font-feature-settings: inherit;
+}
+
+/* Ensure text rendering is optimal for OpenType features */
+h1 .hls-styled,
+h2 .hls-styled,
+h3 .hls-styled,
+h4 .hls-styled,
+h5 .hls-styled,
+h6 .hls-styled {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Prevent features from being disabled by normalize/reset */
+.hls-styled * {
+    font-feature-settings: inherit;
+}
+
+/* Print styles - ensure features are preserved */
+@media print {
+    .hls-styled {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/**
+ * Helper classes for common feature combinations
+ * These can be used programmatically or in custom CSS
+ */
+
+/* Standard ligatures */
+.hls-liga {
+    font-feature-settings: "liga" 1;
+}
+
+/* Discretionary ligatures */
+.hls-dlig {
+    font-feature-settings: "dlig" 1;
+}
+
+/* Contextual alternates */
+.hls-calt {
+    font-feature-settings: "calt" 1;
+}
+
+/* Contextual alternates + standard ligatures */
+.hls-liga-calt {
+    font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Swashes */
+.hls-swsh {
+    font-feature-settings: "swsh" 1;
+}
+
+/* Contextual swashes */
+.hls-cswh {
+    font-feature-settings: "cswh" 1;
+}
+
+/* Stylistic alternates */
+.hls-salt {
+    font-feature-settings: "salt" 1;
+}
+
+/* Titling forms */
+.hls-titl {
+    font-feature-settings: "titl" 1;
+}
+
+/* Ornaments */
+.hls-ornm {
+    font-feature-settings: "ornm" 1;
+}
+
+/* Stylistic sets */
+.hls-ss01 { font-feature-settings: "ss01" 1; }
+.hls-ss02 { font-feature-settings: "ss02" 1; }
+.hls-ss03 { font-feature-settings: "ss03" 1; }
+.hls-ss04 { font-feature-settings: "ss04" 1; }
+.hls-ss05 { font-feature-settings: "ss05" 1; }
+.hls-ss06 { font-feature-settings: "ss06" 1; }
+.hls-ss07 { font-feature-settings: "ss07" 1; }
+.hls-ss08 { font-feature-settings: "ss08" 1; }
+.hls-ss09 { font-feature-settings: "ss09" 1; }
+.hls-ss10 { font-feature-settings: "ss10" 1; }
+.hls-ss11 { font-feature-settings: "ss11" 1; }
+.hls-ss12 { font-feature-settings: "ss12" 1; }
+.hls-ss13 { font-feature-settings: "ss13" 1; }
+.hls-ss14 { font-feature-settings: "ss14" 1; }
+.hls-ss15 { font-feature-settings: "ss15" 1; }
+.hls-ss16 { font-feature-settings: "ss16" 1; }
+.hls-ss17 { font-feature-settings: "ss17" 1; }
+.hls-ss18 { font-feature-settings: "ss18" 1; }
+.hls-ss19 { font-feature-settings: "ss19" 1; }
+.hls-ss20 { font-feature-settings: "ss20" 1; }
+
+/**
+ * Preset combinations based on default presets
+ */
+
+/* Elegant Script: calt + ss02 */
+.hls-preset-elegant-script {
+    font-feature-settings: "calt" 1, "ss02" 1;
+}
+
+/* Wedding Style: calt + ss02 + swsh */
+.hls-preset-wedding-style {
+    font-feature-settings: "calt" 1, "ss02" 1, "swsh" 1;
+}
+
+/* Vintage Ornate: calt + dlig + ss01 */
+.hls-preset-vintage-ornate {
+    font-feature-settings: "calt" 1, "dlig" 1, "ss01" 1;
+}
+
+/* Modern Clean: liga + calt */
+.hls-preset-modern-clean {
+    font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Full Swash: calt + swsh + cswh + salt */
+.hls-preset-full-swash {
+    font-feature-settings: "calt" 1, "swsh" 1, "cswh" 1, "salt" 1;
+}
+
+/**
+ * Accessibility - ensure features don't break screen readers
+ */
+.hls-styled {
+    /* Preserve text content for screen readers */
+    speak: normal;
+}
+
+/**
+ * Performance optimization
+ * Use will-change for animated text with features
+ */
+.hls-styled.hls-animated {
+    will-change: font-feature-settings;
+}
+
+/**
+ * Browser-specific fixes
+ */
+
+/* Firefox */
+@-moz-document url-prefix() {
+    .hls-styled {
+        -moz-font-feature-settings: inherit;
+    }
+}
+
+/* Safari */
+@supports (-webkit-appearance: none) {
+    .hls-styled {
+        -webkit-font-feature-settings: inherit;
+    }
+}
+
+/* Edge legacy */
+@supports (-ms-ime-align: auto) {
+    .hls-styled {
+        -ms-font-feature-settings: inherit;
+    }
+}
