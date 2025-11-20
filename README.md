@@ -232,7 +232,7 @@ This project is licensed under the GPL v2 or later - see the [LICENSE](LICENSE) 
 
 ## Credits
 
-**Developed by:** Matthew Cowan
+**Developed by:** Matthew Neil Cowan (github: mattcowan)
 
 **Inspired by:** Beautiful typography and the amazing work of type designers like Alejandro Paul
 
