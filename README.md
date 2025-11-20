@@ -17,7 +17,6 @@ A WordPress plugin that adds advanced OpenType typography features to headlines 
 ### ✨ User-Friendly Interface
 - Inline text selection in the block editor
 - Live preview before applying changes
-- Quick preset buttons for common styles
 - Organized feature categories
 - Visual popover interface
 
@@ -26,13 +25,6 @@ A WordPress plugin that adds advanced OpenType typography features to headlines 
 - Works with Gutenberg block editor
 - Compatible with all modern browsers
 - Optimized for script and display fonts
-
-### 📦 Pre-Built Presets
-- **Elegant Script**: Perfect for sophisticated headlines
-- **Wedding Style**: Romantic calligraphy with swashes
-- **Vintage Ornate**: Classic decorative ligatures
-- **Modern Clean**: Contemporary minimalism
-- **Full Swash**: Maximum flourish and decoration
 
 ## Installation
 
@@ -89,7 +81,7 @@ This plugin works best with fonts that support OpenType features:
 <h1>Sarah & Michael</h1>
 
 <!-- After (with Wedding Style preset: calt + ss02 + swsh) -->
-<h1>Sarah <span class="hls-styled" data-features="calt,ss02,swsh" style="font-feature-settings: 'calt' 1, 'ss02' 1, 'swsh' 1">&</span> Michael</h1>
+<h1><span class="hls-styled" data-features="calt,ss02,swsh" style="font-feature-settings: 'calt' 1, 'ss02' 1, 'swsh' 1">S</span>arah & Michael</h1>
 ```
 
 ## Technical Details
