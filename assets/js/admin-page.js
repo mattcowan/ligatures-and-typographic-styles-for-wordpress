@@ -200,7 +200,16 @@ jQuery(document).ready(function($) {
     $('#hls-preview-font-select').on('change', function() {
         var selectedFont = $(this).val();
 
-        // Update all preset previews
+        // Update all feature demo previews
+        $('.hls-feature-preview').each(function() {
+            if (selectedFont) {
+                $(this).css('font-family', selectedFont);
+            } else {
+                $(this).css('font-family', 'Georgia, serif');
+            }
+        });
+
+        // Update all preset previews (if any exist)
         $('.hls-preset-preview').each(function() {
             if (selectedFont) {
                 $(this).css('font-family', selectedFont);
@@ -222,7 +231,10 @@ jQuery(document).ready(function($) {
         $slider.attr('aria-valuenow', size);
         $slider.attr('aria-valuetext', size + ' pixels');
 
-        // Update all preset previews
+        // Update all feature demo previews
+        $('.hls-feature-preview').css('font-size', size + 'px');
+
+        // Update all preset previews (if any exist)
         $('.hls-preset-preview').css('font-size', size + 'px');
     });
 

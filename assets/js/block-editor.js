@@ -4,7 +4,7 @@
  */
 
 (function(wp) {
-    const { registerFormatType, toggleFormat, applyFormat, removeFormat, getActiveFormat } = wp.richText;
+    const { registerFormatType, toggleFormat, applyFormat, removeFormat, getActiveFormat, slice, getTextContent } = wp.richText;
     const { RichTextToolbarButton } = wp.blockEditor;
     const { Component, Fragment } = wp.element;
     const { Popover, Button, ButtonGroup, ToggleControl, TextControl, SelectControl, PanelBody, RangeControl } = wp.components;
@@ -30,7 +30,8 @@
                 fontSizePreferred: this.getActiveFontSizePreferred() || 24,
                 fontSizeMax: this.getActiveFontSizeMax() || 32,
                 showPreview: true,
-                activePreset: null
+                activePreset: null,
+                previewText: ''
             };
 
             this.togglePopover = this.togglePopover.bind(this);
@@ -133,6 +134,21 @@
          * Toggle popover visibility
          */
         togglePopover() {
+            const { value } = this.props;
+
+            // Extract selected text when opening popover
+            let extractedText = '';
+            if (!this.state.isOpen && value) {
+                if (value.start !== value.end) {
+                    // There's a selection - extract it
+                    const slicedValue = slice(value, value.start, value.end);
+                    extractedText = getTextContent(slicedValue);
+                } else {
+                    // No selection - use entire text
+                    extractedText = getTextContent(value);
+                }
+            }
+
             this.setState(state => ({
                 isOpen: !state.isOpen,
                 selectedFeatures: this.getActiveFeatures() || [],
@@ -140,7 +156,8 @@
                 fontSize: this.getActiveFontSize() || 'inherit',
                 fontSizeMin: this.getActiveFontSizeMin() || 16,
                 fontSizePreferred: this.getActiveFontSizePreferred() || 24,
-                fontSizeMax: this.getActiveFontSizeMax() || 32
+                fontSizeMax: this.getActiveFontSizeMax() || 32,
+                previewText: extractedText
             }));
         }
 
@@ -380,15 +397,22 @@
         }
 
         render() {
-            const { isActive, value } = this.props;
-            const { isOpen, selectedFeatures, selectedFont, fontSize, fontSizeMin, fontSizePreferred, fontSizeMax, showPreview } = this.state;
+            const { isActive } = this.props;
+            const { isOpen, selectedFeatures, selectedFont, fontSize, fontSizeMin, fontSizePreferred, fontSizeMax, showPreview, previewText } = this.state;
             const groupedFeatures = this.groupFeatures();
             const presets = hlsData.presets || [];
             const fonts = hlsData.fonts || [];
 
-            // Get selected text for preview
-            const selectedText = value && value.text ? value.text.slice(value.start, value.end) : '';
-            const previewText = selectedText || __('Elegant Typography & Flourish', 'headline-ligatures-styles');
+            // Use stored preview text or fallback
+            const displayText = previewText || __('Elegant Typography & Flourish', 'headline-ligatures-styles');
+
+            // Build preview style
+            const previewStyle = {
+                fontFeatureSettings: this.featuresToCSS(selectedFeatures)
+            };
+            if (selectedFont) {
+                previewStyle.fontFamily = selectedFont;
+            }
 
             return (
                 <Fragment>
@@ -498,19 +522,21 @@
                                 </div>
 
                                 {/* Preview Section */}
-                                {selectedFeatures.length > 0 && showPreview && (
+                                {showPreview && (
                                     <div className="hls-preview-section">
                                         <h4>{__('Preview', 'headline-ligatures-styles')}</h4>
                                         <div
                                             className="hls-preview-text"
-                                            style={{ fontFeatureSettings: this.featuresToCSS(selectedFeatures) }}
+                                            style={previewStyle}
                                         >
-                                            {previewText}
+                                            {displayText}
                                         </div>
-                                        <div className="hls-preview-features">
-                                            {__('Active: ', 'headline-ligatures-styles')}
-                                            <code>{selectedFeatures.join(', ')}</code>
-                                        </div>
+                                        {selectedFeatures.length > 0 && (
+                                            <div className="hls-preview-features">
+                                                {__('Active: ', 'headline-ligatures-styles')}
+                                                <code>{selectedFeatures.join(', ')}</code>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

@@ -92,8 +92,8 @@ $custom_fonts = get_option('hls_custom_fonts', array());
             role="tabpanel"
             aria-labelledby="hls-tab-button-presets"
             tabindex="0">
-            <h2><?php _e('Typography Presets', 'headline-ligatures-styles'); ?></h2>
-            <p><?php _e('Manage your saved font feature combinations. These presets appear in the block editor for quick application.', 'headline-ligatures-styles'); ?></p>
+            <h2><?php _e('Feature Demonstrations', 'headline-ligatures-styles'); ?></h2>
+            <p><?php _e('See how each OpenType feature affects your text. Compare the default rendering with each feature enabled.', 'headline-ligatures-styles'); ?></p>
 
             <div class="hls-preset-controls">
                 <?php if (!empty($custom_fonts)): ?>
@@ -118,7 +118,7 @@ $custom_fonts = get_option('hls_custom_fonts', array());
                         ?>
                     </select>
                     <p class="description">
-                        <?php _e('Select a custom font to preview how the presets will look with that font.', 'headline-ligatures-styles'); ?>
+                        <?php _e('Select a custom font to preview how features will look with that font.', 'headline-ligatures-styles'); ?>
                     </p>
                 </div>
                 <?php endif; ?>
@@ -147,26 +147,90 @@ $custom_fonts = get_option('hls_custom_fonts', array());
                 </div>
             </div>
 
-            <div class="hls-presets-grid">
-                <?php foreach ($presets as $preset): ?>
-                <div class="hls-preset-card">
-                    <h3><?php echo esc_html($preset['name']); ?></h3>
-                    <p class="hls-preset-description"><?php echo esc_html($preset['description']); ?></p>
-                    <div class="hls-preset-features">
-                        <strong><?php _e('Features:', 'headline-ligatures-styles'); ?></strong>
-                        <?php echo esc_html(implode(', ', $preset['features'])); ?>
-                    </div>
-                    <div class="hls-preset-preview" style="font-feature-settings: <?php echo esc_attr($instance->features_to_css($preset['features'])); ?>">
-                        <?php _e('Elegant Typography', 'headline-ligatures-styles'); ?>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
+            <?php
+            $available_features = $instance->get_available_features();
+            $grouped_features = array();
 
-            <div class="hls-add-preset-section">
-                <h3><?php _e('Add Custom Preset', 'headline-ligatures-styles'); ?></h3>
-                <p><?php _e('Custom presets can be created directly in the block editor by selecting features and clicking "Save as Preset".', 'headline-ligatures-styles'); ?></p>
+            // Group features by category
+            foreach ($available_features as $feature) {
+                $category = isset($feature['category']) ? $feature['category'] : 'other';
+                if (!isset($grouped_features[$category])) {
+                    $grouped_features[$category] = array();
+                }
+                $grouped_features[$category][] = $feature;
+            }
+
+            $category_titles = array(
+                'ligatures' => __('Ligatures', 'headline-ligatures-styles'),
+                'stylistic-sets' => __('Stylistic Sets', 'headline-ligatures-styles'),
+                'alternates' => __('Swashes & Alternates', 'headline-ligatures-styles'),
+                'decorative' => __('Decorative', 'headline-ligatures-styles')
+            );
+            ?>
+
+            <?php foreach ($grouped_features as $category => $features): ?>
+            <div class="hls-feature-category-section">
+                <h3><?php echo esc_html(isset($category_titles[$category]) ? $category_titles[$category] : ucfirst($category)); ?></h3>
+
+                <div class="hls-feature-demos-grid">
+                    <?php foreach ($features as $feature): ?>
+                    <div class="hls-feature-demo-card">
+                        <div class="hls-feature-demo-header">
+                            <h4><?php echo esc_html($feature['name']); ?></h4>
+                            <code class="hls-feature-code"><?php echo esc_html($feature['id']); ?></code>
+                        </div>
+                        <p class="hls-feature-demo-description"><?php echo esc_html($feature['description']); ?></p>
+
+                        <div class="hls-feature-comparison">
+                            <div class="hls-feature-preview-container">
+                                <div class="hls-feature-preview-label"><?php _e('Default:', 'headline-ligatures-styles'); ?></div>
+                                <div class="hls-feature-preview hls-feature-preview-off">
+                                    <?php echo esc_html($instance->get_feature_demo_text($feature['id'])); ?>
+                                </div>
+                            </div>
+
+                            <div class="hls-feature-preview-container">
+                                <div class="hls-feature-preview-label"><?php _e('With Feature:', 'headline-ligatures-styles'); ?></div>
+                                <div
+                                    class="hls-feature-preview hls-feature-preview-on"
+                                    style="font-feature-settings: '<?php echo esc_attr($feature['id']); ?>' 1;">
+                                    <?php echo esc_html($instance->get_feature_demo_text($feature['id'])); ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
+            <?php endforeach; ?>
+
+            <?php if (!empty($presets)): ?>
+            <div class="hls-user-presets-section">
+                <h3><?php _e('Your Saved Presets', 'headline-ligatures-styles'); ?></h3>
+                <p><?php _e('These are presets you\'ve created in the block editor.', 'headline-ligatures-styles'); ?></p>
+
+                <div class="hls-presets-grid">
+                    <?php foreach ($presets as $preset): ?>
+                    <div class="hls-preset-card">
+                        <h4><?php echo esc_html($preset['name']); ?></h4>
+                        <p class="hls-preset-description"><?php echo esc_html($preset['description']); ?></p>
+                        <div class="hls-preset-features">
+                            <strong><?php _e('Features:', 'headline-ligatures-styles'); ?></strong>
+                            <?php echo esc_html(implode(', ', $preset['features'])); ?>
+                        </div>
+                        <div class="hls-preset-preview" style="font-feature-settings: <?php echo esc_attr($instance->features_to_css($preset['features'])); ?>">
+                            <?php echo esc_html($instance->get_feature_demo_text($preset['features'][0])); ?>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="hls-add-preset-section">
+                <h3><?php _e('Create Custom Presets', 'headline-ligatures-styles'); ?></h3>
+                <p><?php _e('Custom presets can be created directly in the block editor by selecting features and clicking "Save as Preset". Your saved presets will appear here.', 'headline-ligatures-styles'); ?></p>
+            </div>
+            <?php endif; ?>
         </div>
 
         <!-- Fonts Tab -->

@@ -580,41 +580,38 @@ class Headline_Ligatures_Styles {
     }
 
     /**
-     * Get default presets
+     * Get default presets (empty by default - users create their own)
      */
     private function get_default_presets() {
-        return array(
-            array(
-                'id' => 'elegant-script',
-                'name' => __('Elegant Script', 'headline-ligatures-styles'),
-                'features' => array('calt', 'ss02'),
-                'description' => __('Contextual alternates with stylistic set 2', 'headline-ligatures-styles')
-            ),
-            array(
-                'id' => 'wedding-style',
-                'name' => __('Wedding Style', 'headline-ligatures-styles'),
-                'features' => array('calt', 'ss02', 'swsh'),
-                'description' => __('Perfect for wedding invitations with swashes', 'headline-ligatures-styles')
-            ),
-            array(
-                'id' => 'vintage-ornate',
-                'name' => __('Vintage Ornate', 'headline-ligatures-styles'),
-                'features' => array('calt', 'dlig', 'ss01'),
-                'description' => __('Discretionary ligatures with stylistic alternates', 'headline-ligatures-styles')
-            ),
-            array(
-                'id' => 'modern-clean',
-                'name' => __('Modern Clean', 'headline-ligatures-styles'),
-                'features' => array('liga', 'calt'),
-                'description' => __('Standard ligatures with contextual alternates', 'headline-ligatures-styles')
-            ),
-            array(
-                'id' => 'full-swash',
-                'name' => __('Full Swash', 'headline-ligatures-styles'),
-                'features' => array('calt', 'swsh', 'cswh', 'salt'),
-                'description' => __('Maximum flourish with all swash features', 'headline-ligatures-styles')
-            )
+        return array();
+    }
+
+    /**
+     * Get sample text for feature demonstrations
+     */
+    public function get_feature_demo_text($feature_id) {
+        $demo_texts = array(
+            // Ligatures
+            'liga' => 'fi fl ff ffi ffl',
+            'dlig' => 'ct st sp Th',
+            'calt' => 'Beautiful Typography',
+
+            // Stylistic Sets (generic - works for most)
+            'ss01' => 'AaBbGgQqRr 1234567890',
+            'ss02' => 'AaBbGgQqRr 1234567890',
+            'ss03' => 'AaBbGgQqRr 1234567890',
+            'ss04' => 'AaBbGgQqRr 1234567890',
+            'ss05' => 'AaBbGgQqRr 1234567890',
+
+            // Swashes & Alternates
+            'swsh' => 'Elegant Flourish',
+            'cswh' => 'Beautiful Swashes',
+            'salt' => 'Alternative Glyphs',
+            'titl' => 'TITLING CAPS',
+            'ornm' => '* § ¶ † ‡ • ◆'
         );
+
+        return isset($demo_texts[$feature_id]) ? $demo_texts[$feature_id] : 'Sample Text';
     }
 
     /**
