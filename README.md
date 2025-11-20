@@ -235,9 +235,7 @@ This project is licensed under the GPL v2 or later - see the [LICENSE](LICENSE) 
 
 ## Support
 
-- **Documentation**: [Link to docs, someday]
-- **Issues**: [GitHub Issues](https://github.com/yourusername/headline-ligatures-styles/issues)
-- **WordPress.org**: [Plugin Page](https://wordpress.org/plugins/headline-ligatures-styles/)
+- **Issues**: [GitHub Issues](https://github.com/mattcowan/headline-ligatures-styles/issues)
 
 ---
 
