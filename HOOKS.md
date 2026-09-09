@@ -763,7 +763,9 @@ Behavior:
 
 **Availability:** Handled by both the inline editor (format type `typost/features`) and the Typography Stylist block.
 
-**Indexed alternates (`data-feature-settings`):** The comma-tag `data-features` format implies `"tag" 1` and cannot express indexed alternates like `font-feature-settings: "salt" 2`. For those, set the raw value in a `data-feature-settings` attribute (registered on the `typost/features` format) and put the full value in `style`. List any plain index-1 tags in `data-features` as usual. The inline editor preserves `data-feature-settings` verbatim when other properties are re-applied to the span, and appends newly toggled tags that aren't already present in the raw value.
+**Indexed alternates (`data-feature-settings`):** The comma-tag `data-features` format implies `"tag" 1` and cannot express indexed alternates like `font-feature-settings: "salt" 2`. For those, set the raw value in a `data-feature-settings` attribute (registered on the `typost/features` format) and put the full value in `style`. List any plain index-1 tags in `data-features` as usual. The inline editor preserves `data-feature-settings` when other properties are re-applied to the span, and appends newly toggled tags that aren't already present in the raw value. A toggle does override the raw value's own clauses for its tag (since 2.3): enabling a tag drops a `"tag" 0` clause (an indexed `"salt" 2` is kept as the more specific setting), and disabling a tag drops every clause for it — see `pruneRawFeatureSettings()` in `utils.js`, also exposed on `window.typostSharedUtils`.
+
+The same raw attribute is how an insertion **turns a feature off** on the span it creates — `font-feature-settings: "swsh" 0` — which is what the Glyphs Panel's base cell writes when the alternate it replaces comes from a block-level feature or a paragraph style (an inline-format reset alone would leave the alternate active through CSS inheritance). Put the `"tag" 0` clauses in `data-feature-settings`, list only the tags that stay on in `data-features`, and mirror the full value in `style`.
 
 ---
 

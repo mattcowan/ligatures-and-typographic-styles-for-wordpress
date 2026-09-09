@@ -90,6 +90,38 @@ describe('mergeTypostSpanStyling — bug #2: raw indexed alternates', () => {
 		mergeTypostSpanStyling(span, { 'data-features': 'salt' }, 'font-feature-settings: "salt" 1');
 		expect(span.getAttribute('style')).toBe('font-feature-settings: "salt" 2');
 	});
+
+	test('applying a tag drops the raw "tag" 0 clause the Glyphs Panel base cell wrote', () => {
+		const span = makeSpan({
+			'data-features': 'dlig',
+			'data-feature-settings': '"swsh" 0, "dlig" 1',
+			style: 'font-feature-settings: "swsh" 0, "dlig" 1; font-family: var(--font-1)',
+		});
+		mergeTypostSpanStyling(span, { 'data-features': 'swsh' }, 'font-feature-settings: "swsh" 1');
+		expect(span.getAttribute('data-features')).toBe('dlig,swsh');
+		expect(span.getAttribute('data-feature-settings')).toBe('"dlig" 1');
+		expect(span.getAttribute('style')).toBe('font-feature-settings: "dlig" 1, "swsh" 1; font-family: var(--font-1)');
+	});
+
+	test('the raw attribute is removed when the applied tag was its only clause', () => {
+		const span = makeSpan({
+			'data-feature-settings': '"swsh" 0',
+			style: 'font-feature-settings: "swsh" 0',
+		});
+		mergeTypostSpanStyling(span, { 'data-features': 'swsh' }, 'font-feature-settings: "swsh" 1');
+		expect(span.hasAttribute('data-feature-settings')).toBe(false);
+		expect(span.getAttribute('style')).toBe('font-feature-settings: "swsh" 1');
+	});
+
+	test('a raw "off" clause for a tag the caller is NOT applying survives', () => {
+		const span = makeSpan({
+			'data-feature-settings': '"swsh" 0',
+			style: 'font-feature-settings: "swsh" 0',
+		});
+		mergeTypostSpanStyling(span, { 'data-features': 'liga' }, 'font-feature-settings: "liga" 1');
+		expect(span.getAttribute('data-feature-settings')).toBe('"swsh" 0');
+		expect(span.getAttribute('style')).toBe('font-feature-settings: "swsh" 0, "liga" 1');
+	});
 });
 
 describe('mergeTypostSpanStyling — bug #3: variation settings vs font changes', () => {

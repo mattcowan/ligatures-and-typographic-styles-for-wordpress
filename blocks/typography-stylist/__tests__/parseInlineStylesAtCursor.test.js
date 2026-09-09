@@ -100,6 +100,23 @@ describe('Typography Stylist - parseInlineStylesAtCursor', () => {
 		expect(result.features).toEqual(['ss01', 'liga', 'swsh']);
 	});
 
+	it('should report tags the span turns off via data-feature-settings as disabledFeatures', () => {
+		// The Glyphs Panel base cell writes "swsh" 0 over a block-level swash
+		const html = '<span class="typost-styled" data-features="dlig" data-feature-settings="&quot;swsh&quot; 0, &quot;dlig&quot; 1" style="font-feature-settings: &quot;swsh&quot; 0, &quot;dlig&quot; 1">W</span>onderful';
+		const result = parseInlineStylesAtCursor(html, 0, 1);
+
+		expect(result).not.toBeNull();
+		expect(result.features).toEqual(['dlig']);
+		expect(result.disabledFeatures).toEqual(['swsh']);
+	});
+
+	it('should report an empty disabledFeatures list when nothing is turned off', () => {
+		const html = '<span class="typost-styled" data-features="liga" data-feature-settings="&quot;salt&quot; 2, &quot;liga&quot; 1" style="font-feature-settings: &quot;salt&quot; 2, &quot;liga&quot; 1">Text</span>';
+		const result = parseInlineStylesAtCursor(html, 2, 2);
+
+		expect(result.disabledFeatures).toEqual([]);
+	});
+
 	// ===== STYLE FALLBACK (BACKWARD COMPATIBILITY) =====
 
 	it('should detect letterSpacing from style attribute when no data attr (backward compat)', () => {

@@ -2345,7 +2345,16 @@ const RESPONSIVE_FONT_MAX_VIEWPORT = 1920; // Desktop baseline
             } else {
                 activeFormatForRaw = getActiveFormat(value, FORMAT_TYPE);
             }
-            const rawFeatureSettings = (activeFormatForRaw && activeFormatForRaw.attributes && activeFormatForRaw.attributes['data-feature-settings']) || '';
+            let rawFeatureSettings = (activeFormatForRaw && activeFormatForRaw.attributes && activeFormatForRaw.attributes['data-feature-settings']) || '';
+            // The toggles made since the last apply override the raw value's
+            // clauses for their tags — a "swsh" 0 written by the Glyphs Panel
+            // base cell would otherwise keep winning over the popover toggle
+            const sharedForRaw = window.typostSharedUtils || {};
+            if (rawFeatureSettings && sharedForRaw.pruneRawFeatureSettings && this._pendingChanges) {
+                this._pendingChanges.featureToggles.forEach((toggle) => {
+                    rawFeatureSettings = sharedForRaw.pruneRawFeatureSettings(rawFeatureSettings, toggle.tag, toggle.enabled);
+                });
+            }
 
             // MIXED SELECTIONS: when the range spans multiple distinct typost
             // formats (or formatted + plain text), stamping the full popover

@@ -43,6 +43,16 @@
 	 *    range's formats onto the insertion), whereas a span payload owns
 	 *    data-features / data-feature-settings in the core merge and so
 	 *    drops the inherited alternate while sizing/spacing survive.
+	 * 6. Clearing an inherited inline format is not enough when the alternate
+	 *    comes from a BLOCK-LEVEL feature (or a paragraph style / theme CSS):
+	 *    contextFeatures then carries that tag, and re-declaring it on the
+	 *    span — or leaving it undeclared and inherited through CSS — keeps
+	 *    the alternate on. So for isBaseGlyph, every clearTags entry that is
+	 *    active in context is written as "tag" 0 into data-feature-settings
+	 *    (the raw form the core format already supports for indexed
+	 *    alternates), the remaining context tags follow at 1, and
+	 *    data-features lists only the kept tags so the editor's toggles do
+	 *    not show the cleared feature as on.
 	 *
 	 * @param {Object} opts
 	 * @param {string} opts.text            Character(s) to insert ('A', 'fi')
@@ -52,6 +62,10 @@
 	 * @param {boolean} opts.isBaseGlyph    True for the alternates view's base
 	 *                                      cell — force a span so the inherited
 	 *                                      alternate is cleared (rule 5)
+	 * @param {string[]} opts.clearTags     Feature tags that produce alternates
+	 *                                      for this character (the tags shown in
+	 *                                      the alternates view); only used with
+	 *                                      isBaseGlyph (rule 6)
 	 * @param {number} opts.panelFontId     Font selected in the glyphs panel (numeric font_id)
 	 * @param {string} opts.panelFontFamily CSS family for fonts without a numeric id
 	 *                                      (WP Font Library); used only when panelFontId is 0
@@ -66,6 +80,7 @@
 		var featureTag = opts.featureTag || null;
 		var featureIndex = opts.featureIndex || 1;
 		var isBaseGlyph = !!opts.isBaseGlyph;
+		var clearTags = (isBaseGlyph && Array.isArray(opts.clearTags)) ? opts.clearTags : [];
 		var panelFontId = opts.panelFontId || 0;
 		var panelFontFamily = opts.panelFontFamily || '';
 		var contextFontId = opts.contextFontId || 0;
@@ -86,24 +101,40 @@
 		// Plain (index-1) tags: the glyph's own feature first, then context
 		// features, deduped; the indexed tag is carried separately
 		var indexed = featureTag && featureIndex > 1;
+		// Base cell: context tags that produce alternates for this character
+		// are turned OFF explicitly (rule 6) instead of re-declared
+		var disabledTags = [];
 		var plainTags = [];
 		var seen = {};
 		(featureTag && !indexed ? [featureTag] : []).concat(contextFeatures).forEach(function(tag) {
-			if (tag && !seen[tag] && !(indexed && tag === featureTag)) {
-				seen[tag] = true;
+			if (!tag || seen[tag] || (indexed && tag === featureTag)) {
+				return;
+			}
+			seen[tag] = true;
+			if (clearTags.indexOf(tag) !== -1) {
+				disabledTags.push(tag);
+			} else {
 				plainTags.push(tag);
 			}
 		});
 
-		if (indexed) {
-			// Indexed alternates can't be expressed by comma-tag data-features —
-			// the raw value goes into data-feature-settings (registered on the
-			// core typost/features format)
-			var raw = '"' + featureTag + '" ' + featureIndex;
+		if (indexed || disabledTags.length > 0) {
+			// Indexed alternates ("salt" 2) and disabled tags ("swsh" 0) can't
+			// be expressed by comma-tag data-features — the raw value goes into
+			// data-feature-settings (registered on the core typost/features
+			// format); the plain tags ride along at 1 AND in data-features
+			var rawParts = [];
+			if (indexed) {
+				rawParts.push('"' + featureTag + '" ' + featureIndex);
+			}
+			disabledTags.forEach(function(tag) {
+				rawParts.push('"' + tag + '" 0');
+			});
 			if (plainTags.length > 0) {
-				raw += ', ' + buildFeatureSettingsCSS(plainTags);
+				rawParts.push(buildFeatureSettingsCSS(plainTags));
 				attributes['data-features'] = plainTags.join(',');
 			}
+			var raw = rawParts.join(', ');
 			attributes['data-feature-settings'] = raw;
 			styleParts.push('font-feature-settings: ' + raw);
 		} else if (plainTags.length > 0) {

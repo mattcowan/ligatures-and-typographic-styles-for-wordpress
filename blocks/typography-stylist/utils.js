@@ -330,7 +330,10 @@ export function parseInlineFontFamilyAtCursor(htmlContent, cursorStart, cursorEn
  *
  * Unified parser that detects features, fontId, fontWeight, fontSize (+ breakpoints),
  * letterSpacing, lineHeight, fitScale, fitShift, plus span boundaries
- * (spanText, spanStart, spanEnd).
+ * (spanText, spanStart, spanEnd). `disabledFeatures` lists the tags the
+ * innermost span turns OFF through a raw data-feature-settings value
+ * ("swsh" 0), so a toggle can show "off" for text inside a block that has
+ * the feature on.
  *
  * @param {string} htmlContent - HTML content to parse
  * @param {number} cursorStart - Cursor/selection start offset (in text, not HTML)
@@ -405,6 +408,7 @@ export function parseInlineStylesAtCursor(htmlContent, cursorStart, cursorEnd) {
 		// Extract properties from the innermost span and walk UP to collect inherited properties
 		const result = {
 			features: [],
+			disabledFeatures: [],
 			fontId: null,
 			fontWeight: null,
 			fontStyle: null,
@@ -432,6 +436,18 @@ export function parseInlineStylesAtCursor(htmlContent, cursorStart, cursorEnd) {
 		while (currentSpan) {
 			// Features - ONLY from innermost span (not inherited)
 			if (currentSpan === smallestMatchingSpan) {
+				// Tags the span turns OFF ("swsh" 0 in data-feature-settings,
+				// written by the Glyphs Panel base cell over a block-level
+				// feature) — consumers use these to show the toggle as off
+				// even though the block itself has the feature on
+				const rawSettings = currentSpan.getAttribute('data-feature-settings') || '';
+				const offRegex = /["']([^"']+)["']\s+(?:0|off)\b/gi;
+				let offMatch;
+				while ((offMatch = offRegex.exec(rawSettings))) {
+					if (result.disabledFeatures.indexOf(offMatch[1]) === -1) {
+						result.disabledFeatures.push(offMatch[1]);
+					}
+				}
 				const featuresAttr = currentSpan.getAttribute('data-features');
 				if (featuresAttr) {
 					result.features = featuresAttr.split(',').map(f => f.trim()).filter(f => f);
@@ -988,7 +1004,10 @@ export function canCreateNestedSpan(element) {
  * - data-features merge and deduplicate; font-feature-settings rebuilds from
  *   the merged set, honoring raw indexed alternates in data-feature-settings
  *   (e.g. '"salt" 2' — plain '"tag" 1' entries are added only for tags the
- *   raw value doesn't already cover);
+ *   raw value doesn't already cover), except that a tag the caller applies
+ *   drops any '"tag" 0' clause the raw value held for it (see
+ *   pruneRawFeatureSettings), so a toggle can undo a Glyphs Panel base-cell
+ *   "off";
  * - a font CHANGE (explicit data-font-id differing from the span's) removes
  *   font-variation-settings (axis values are font-specific) and any legacy
  *   data-font family name (it would go stale; rendering keys off data-font-id).
@@ -1095,7 +1114,24 @@ export function mergeTypostSpanStyling(span, attributes, styleString) {
 		// Rebuild font-feature-settings from the merged feature set, honoring
 		// raw indexed alternates (data-feature-settings)
 		if (mergedFeatures.length > 0) {
-			const raw = (attributes['data-feature-settings'] || span.getAttribute('data-feature-settings') || '');
+			let raw = (attributes['data-feature-settings'] || span.getAttribute('data-feature-settings') || '');
+			// A tag the caller is applying overrides an "off" clause the raw
+			// value holds for it ("swsh" 0 from the Glyphs Panel base cell) —
+			// the raw precedence below would otherwise make the toggle inert
+			const incomingTags = attributes['data-features']
+				? String(attributes['data-features']).split(',').map(f => f.trim()).filter(f => f)
+				: [];
+			const prunedRaw = incomingTags.reduce((value, tag) => pruneRawFeatureSettings(value, tag, true), raw);
+			if (prunedRaw !== raw) {
+				raw = prunedRaw;
+				if (raw) {
+					span.setAttribute('data-feature-settings', raw);
+					attributes['data-feature-settings'] = raw;
+				} else {
+					span.removeAttribute('data-feature-settings');
+					delete attributes['data-feature-settings'];
+				}
+			}
 			const plain = mergedFeatures
 				.filter(f => raw.indexOf(`"${f}"`) === -1)
 				.map(f => `"${f}" 1`)
@@ -2306,6 +2342,42 @@ export function filterFeaturesByVisibility(allFeatures, fontId, visibilityMap) {
 }
 
 /**
+ * Remove a feature tag's clauses from a raw font-feature-settings value so a
+ * toggle for that tag can take effect.
+ *
+ * Raw values (data-feature-settings) win over the comma-tag list whenever a
+ * span's declaration is rebuilt — that is what keeps an indexed alternate
+ * ("salt" 2) alive across re-applies. But a raw value can also turn a feature
+ * OFF ("swsh" 0, written by the Glyphs Panel's base cell over a block-level
+ * feature), and the same precedence would then make the popover toggle for
+ * that feature inert. So a toggle prunes the raw value first:
+ * - enabling a tag drops its "off" clauses ("tag" 0 / "tag" off); an indexed
+ *   "on" clause ("salt" 2) is kept as the more specific setting;
+ * - disabling a tag drops every clause for it.
+ *
+ * @since 2.3.0
+ * @param {string}  raw     Raw font-feature-settings value ('' allowed)
+ * @param {string}  tag     OpenType feature tag being toggled
+ * @param {boolean} enabled Whether the tag is being turned on
+ * @returns {string} Pruned raw value ('' when nothing remains)
+ */
+export function pruneRawFeatureSettings(raw, tag, enabled) {
+	if (!raw || !tag) {
+		return raw || '';
+	}
+	const kept = String(raw).split(',').map((clause) => clause.trim()).filter(Boolean).filter((clause) => {
+		const match = clause.match(/^["']([^"']+)["']\s*(\S*)$/);
+		if (!match || match[1] !== tag) {
+			return true;
+		}
+		const value = match[2].toLowerCase();
+		const isOff = value === '0' || value === 'off';
+		return enabled ? !isOff : false;
+	});
+	return kept.join(', ');
+}
+
+/**
  * Merge an extension insertion's format attributes with the typost format the
  * insertion replaces, so unrelated styling survives.
  *
@@ -2476,7 +2548,17 @@ export function patchTypostFormatAttributes(existingAttrs, patch) {
 		} else {
 			delete attrs['data-features'];
 		}
-		const raw = attrs['data-feature-settings'] || '';
+		// The toggled tags override the raw value's own clauses for them:
+		// enabling drops a "tag" 0, disabling drops the tag entirely
+		let raw = attrs['data-feature-settings'] || '';
+		toggles.forEach((toggle) => {
+			raw = pruneRawFeatureSettings(raw, toggle.tag, toggle.enabled);
+		});
+		if (raw) {
+			attrs['data-feature-settings'] = raw;
+		} else {
+			delete attrs['data-feature-settings'];
+		}
 		const plain = features
 			.filter((tag) => raw.indexOf(`"${tag}"`) === -1)
 			.map((tag) => `"${tag}" 1`)
@@ -2901,6 +2983,7 @@ if (typeof window !== 'undefined') {
 		computeTypostFormatRuns,
 		isMixedFormatSelection,
 		patchTypostFormatAttributes,
+		pruneRawFeatureSettings,
 		parseStyleString,
 		buildStyleString,
 		applyStylingSafeStringMethod

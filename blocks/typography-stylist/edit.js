@@ -30,7 +30,7 @@ import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import { hasBlockSupport } from '@wordpress/blocks';
 import { useSelect, dispatch } from '@wordpress/data';
 import { create, slice as sliceRichText, getTextContent, insert as insertRichText, applyFormat, toHTMLString } from '@wordpress/rich-text';
-import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle } from './utils';
+import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings } from './utils';
 import { buildFontOptions, isWpLibraryValue, wpSlugFromValue, adoptWpFont, resolveFontIdFromFamily } from '../../assets/js/font-options.js';
 import { FontPicker } from '../../assets/js/font-picker.js';
 import { calculateResize } from '../../assets/js/modal-drag-resize';
@@ -816,6 +816,7 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 
 	// Derive individual properties from unified detection for backward compatibility
 	const inlineFeaturesAtSelection = inlineStylesAtSelection?.features || [];
+	const inlineDisabledFeaturesAtSelection = inlineStylesAtSelection?.disabledFeatures || [];
 	const inlineFontFamilyAtSelection = inlineStylesAtSelection?.fontId || null;
 
 	// Surface the inline font-id at the cursor to QFT-state consumers (e.g. the
@@ -3059,8 +3060,15 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 							const featureList = dataFeatures.split(',').map(f => f.trim()).filter(f => f && f !== featureId);
 
 							// Raw indexed alternates (data-feature-settings, e.g. '"salt" 2')
-							// are independent of the toggled tags and must survive removal
-							const rawSettings = span.getAttribute('data-feature-settings') || '';
+							// for OTHER tags must survive removal; the removed tag's own
+							// clauses go with it, so a raw "on" can't keep it alive and an
+							// "off" clause ("swsh" 0) can't linger on the span
+							const rawSettings = pruneRawFeatureSettings(span.getAttribute('data-feature-settings') || '', featureId, false);
+							if (rawSettings) {
+								span.setAttribute('data-feature-settings', rawSettings);
+							} else {
+								span.removeAttribute('data-feature-settings');
+							}
 
 							if (featureList.length === 0) {
 								// No toggled features left - remove data-features attribute
@@ -3939,8 +3947,11 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 										>
 										{categoryFeatures.map(feature => {
 											const sampleText = previewText || 'ffi ffl Th AE';
-											// Check both block-level features and inline features at cursor
-											const isActive = features.includes(feature.id) || inlineFeaturesAtSelection.includes(feature.id);
+											// Check both block-level features and inline features at cursor.
+											// A span that turns the tag OFF ("swsh" 0 from the Glyphs Panel
+											// base cell) overrides the block-level state for its text.
+											const isActive = inlineFeaturesAtSelection.includes(feature.id) ||
+												(features.includes(feature.id) && !inlineDisabledFeaturesAtSelection.includes(feature.id));
 											return (
 												<div key={feature.id} style={{ marginBottom: '12px', borderBottom: '1px solid #ddd', paddingBottom: '8px' }}>
 													<div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
