@@ -21,6 +21,7 @@
 /tests
 /todo
 /docs
+/private
 
 # --- module-level dev files ---
 __tests__

@@ -3032,39 +3032,74 @@ const PARAGRAPH_STYLE_OWNED_PROPS = [
 ];
 
 /**
+ * Text range covered by a typost span, from a prebuilt offset map.
+ *
+ * @param {Element} span
+ * @param {Array}   textMap buildTextOffsetMap() output
+ * @returns {{start: number, end: number}|null} null for a span with no text
+ */
+function spanTextRange(span, textMap) {
+	let spanStart = Infinity;
+	let spanEnd = -Infinity;
+	textMap.forEach((entry) => {
+		if (span.contains(entry.node)) {
+			spanStart = Math.min(spanStart, entry.start);
+			spanEnd = Math.max(spanEnd, entry.end);
+		}
+	});
+	return spanStart === Infinity ? null : { start: spanStart, end: spanEnd };
+}
+
+/**
  * Typost spans whose styling a selection-scoped paragraph style would have to
  * override: every span that intersects [start, end) except one that strictly
- * contains the whole range. A strictly containing span is not affected — the
- * style's wrapper is created INSIDE it, and an inner element's class beats
- * the outer span's inline declarations — whereas a span equal to the range
- * (the merge case) or partly inside it ends up carrying the style itself or
- * sitting inside its wrapper, where its inline declarations win.
+ * contains the whole range. A span equal to the range (the merge case) or
+ * partly inside it ends up carrying the style itself or sitting inside its
+ * wrapper, where its inline declarations beat the style's class.
+ *
+ * A strictly containing span is a different case. The wrapper is created
+ * INSIDE it, so the class wins for the properties the style declares — but
+ * the style's class is silent on everything the style leaves unset, and the
+ * containing span's inline size, spacing, or features simply inherit into
+ * the selection. That span is therefore handled by splitting it at the
+ * selection (see applyParagraphStyleBySplit) so only the selected segment
+ * is stripped; the innermost such span is returned separately here because
+ * the strip must never touch it as a whole (text outside the selection).
  *
  * @param {Element} container Parsed content container
  * @param {number}  start     Selection start (text offset)
  * @param {number}  end       Selection end (text offset, exclusive)
- * @returns {Element[]}
+ * @returns {{affected: Element[], container: Element|null}} container = the
+ *          innermost span strictly containing the range, if any
  */
 function findParagraphStyleAffectedSpans(container, start, end) {
 	const doc = container.ownerDocument;
 	const textMap = buildTextOffsetMap(container, doc);
 	const spans = Array.prototype.slice.call(container.querySelectorAll('span.typost-styled'));
-	return spans.filter((span) => {
-		let spanStart = Infinity;
-		let spanEnd = -Infinity;
-		textMap.forEach((entry) => {
-			if (span.contains(entry.node)) {
-				spanStart = Math.min(spanStart, entry.start);
-				spanEnd = Math.max(spanEnd, entry.end);
-			}
-		});
-		if (spanStart === Infinity) {
-			return false;
+	const affected = [];
+	let innermostContainer = null;
+	let innermostLength = Infinity;
+	spans.forEach((span) => {
+		const range = spanTextRange(span, textMap);
+		if (!range) {
+			return;
 		}
-		const intersects = spanStart < end && spanEnd > start;
-		const strictlyContains = spanStart <= start && spanEnd >= end && (spanStart < start || spanEnd > end);
-		return intersects && !strictlyContains;
+		const intersects = range.start < end && range.end > start;
+		if (!intersects) {
+			return;
+		}
+		const strictlyContains = range.start <= start && range.end >= end && (range.start < start || range.end > end);
+		if (!strictlyContains) {
+			affected.push(span);
+			return;
+		}
+		const length = range.end - range.start;
+		if (length < innermostLength) {
+			innermostLength = length;
+			innermostContainer = span;
+		}
 	});
+	return { affected, container: innermostContainer };
 }
 
 /**
@@ -3085,6 +3120,10 @@ function spanHasParagraphStyleOverrides(span) {
 		// A declaration that only mirrors a raw glyph alternate (no plain
 		// data-features tags) is glyph-level, not typography the style owns
 		if (prop === 'font-feature-settings' && span.hasAttribute('data-feature-settings')) {
+			return false;
+		}
+		// Likewise a fit-relative scale's "font-size: Nem" (no data-fontsize)
+		if (prop === 'font-size' && span.hasAttribute('data-fitscale') && !span.hasAttribute('data-fontsize')) {
 			return false;
 		}
 		return true;
@@ -3109,9 +3148,67 @@ export function countParagraphStyleConflicts(htmlContent, start, end) {
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
 	const container = doc.body.firstChild;
-	return findParagraphStyleAffectedSpans(container, start, end)
-		.filter(spanHasParagraphStyleOverrides)
-		.length;
+	const found = findParagraphStyleAffectedSpans(container, start, end);
+	// The innermost containing span counts too: it is split at the selection
+	// and its selected segment loses the same styling
+	const candidates = found.container ? found.affected.concat([found.container]) : found.affected;
+	return candidates.filter(spanHasParagraphStyleOverrides).length;
+}
+
+/**
+ * Apply a paragraph style to a selection that sits strictly INSIDE a styled
+ * span, by splitting that span at the selection boundaries. The selected
+ * segment gets the style id (and, being equal to the range, is then stripped
+ * by stripParagraphStyleOverrides like any affected span); the text before
+ * and after keeps the span's styling untouched. Without the split the style's
+ * wrapper would nest inside the span and inherit every property the style
+ * leaves unset — the selected word would keep the span's size or swash.
+ *
+ * Only the innermost containing span is split. Two nested containing spans
+ * cannot be split in one pass (a child crossing a segment boundary makes the
+ * splitter refuse), so that case reports success: false and the caller falls
+ * back to the plain wrapper.
+ *
+ * @since 2.3.0
+ * @param {string} htmlContent Block content BEFORE the style is applied
+ * @param {number} start       Selection start (text offset)
+ * @param {number} end         Selection end (text offset, exclusive)
+ * @param {number|string} styleId Paragraph style ID to apply
+ * @returns {{success: boolean, content: string}} success: false when there
+ *          is no containing span worth splitting (caller uses the normal path)
+ */
+export function applyParagraphStyleBySplit(htmlContent, start, end, styleId) {
+	if (!htmlContent || !(end > start) || !styleId) {
+		return { success: false, content: htmlContent };
+	}
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
+	const container = doc.body.firstChild;
+	const found = findParagraphStyleAffectedSpans(container, start, end);
+	const target = found.container;
+	// Nothing to split when the containing span carries neither styling the
+	// style owns nor a style of its own to replace
+	if (!target || !(spanHasParagraphStyleOverrides(target) || target.hasAttribute('data-style-id'))) {
+		return { success: false, content: htmlContent };
+	}
+	// splitSpanAndApply() picks its parent by attribute presence in document
+	// order; a temporary marker pins it to the innermost containing span
+	const MARKER = 'data-typost-split-target';
+	target.setAttribute(MARKER, '1');
+	const split = splitSpanAndApply(container.innerHTML, start, end, MARKER, { 'data-style-id': String(styleId) }, '');
+	if (!split.success) {
+		return { success: false, content: htmlContent };
+	}
+	const outDoc = parser.parseFromString(`<div>${split.content}</div>`, 'text/html');
+	const outContainer = outDoc.body.firstChild;
+	Array.prototype.slice.call(outContainer.querySelectorAll(`[${MARKER}]`)).forEach((span) => {
+		span.removeAttribute(MARKER);
+		// The splitter always writes a style attribute, even an empty one
+		if (!span.getAttribute('style')) {
+			span.removeAttribute('style');
+		}
+	});
+	return { success: true, content: outContainer.innerHTML };
 }
 
 /**
@@ -3135,6 +3232,11 @@ function stripParagraphStyleOverridesFromSpan(target, isTarget) {
 	const raw = target.getAttribute('data-feature-settings');
 	if (raw) {
 		styleObj['font-feature-settings'] = raw;
+	}
+	// A fit-relative scale renders through font-size too; put its own value back
+	const fitScale = parseFloat(target.getAttribute('data-fitscale'));
+	if (Number.isFinite(fitScale) && fitScale > 0) {
+		styleObj['font-size'] = `${fitScale}em`;
 	}
 	const styleOut = buildStyleString(styleObj);
 	if (styleOut) {
@@ -3174,7 +3276,9 @@ export function stripParagraphStyleOverrides(htmlContent, start, end, styleId) {
 	const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
 	const container = doc.body.firstChild;
 	const id = String(styleId);
-	const targets = findParagraphStyleAffectedSpans(container, start, end)
+	// Never the containing span: stripping it would restyle text outside
+	// the selection (that span is split beforehand, see applyParagraphStyleBySplit)
+	const targets = findParagraphStyleAffectedSpans(container, start, end).affected
 		.filter((span) => span.getAttribute('data-style-id') === id);
 	let stripped = 0;
 	targets.forEach((target) => {

@@ -30,7 +30,7 @@ import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import { hasBlockSupport } from '@wordpress/blocks';
 import { useSelect, dispatch } from '@wordpress/data';
 import { create, slice as sliceRichText, getTextContent, insert as insertRichText, applyFormat, toHTMLString } from '@wordpress/rich-text';
-import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings, countParagraphStyleConflicts, stripParagraphStyleOverrides } from './utils';
+import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings, countParagraphStyleConflicts, stripParagraphStyleOverrides, applyParagraphStyleBySplit } from './utils';
 import { buildFontOptions, isWpLibraryValue, wpSlugFromValue, adoptWpFont, resolveFontIdFromFamily } from '../../assets/js/font-options.js';
 import { FontPicker } from '../../assets/js/font-picker.js';
 import { calculateResize } from '../../assets/js/modal-drag-resize';
@@ -2613,24 +2613,36 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 		// below: a selection covering the whole span merges the new
 		// data-style-id into it instead of nesting a second span.
 		const attrs = { 'data-style-id': String(id) };
-		const parser = new DOMParser();
-		const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
-		const container = doc.body.firstChild;
-
-		const range = getRangeForOffsets(container, start, end, doc);
-		const validation = validateRangeMatchesSelection(
-			range,
-			capturedSelection?.text || '',
-			capturedSelection?.length || 0
-		);
-
 		let success = false;
 		let newContent = content;
 
-		if (validation.valid) {
-			success = applyOrMergeStyling(range, attrs, '', doc);
-			if (success) {
-				newContent = container.innerHTML;
+		// A selection strictly inside a styled run is split out of it first:
+		// nested inside, the style's wrapper would inherit every property the
+		// style leaves unset (the run's size, spacing, features), and the
+		// strip below must not touch the run's text outside the selection.
+		const split = applyParagraphStyleBySplit(content, start, end, id);
+		if (split.success) {
+			success = true;
+			newContent = split.content;
+		}
+
+		if (!success) {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+			const container = doc.body.firstChild;
+
+			const range = getRangeForOffsets(container, start, end, doc);
+			const validation = validateRangeMatchesSelection(
+				range,
+				capturedSelection?.text || '',
+				capturedSelection?.length || 0
+			);
+
+			if (validation.valid) {
+				success = applyOrMergeStyling(range, attrs, '', doc);
+				if (success) {
+					newContent = container.innerHTML;
+				}
 			}
 		}
 
@@ -3115,13 +3127,15 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 									span.removeAttribute('style');
 								}
 
-								// Check if any other typost attributes remain before unwrapping
-								const hasAnyAttributes = span.getAttribute('data-font-id') ||
-								                         span.getAttribute('data-fontsize') ||
-								                         span.getAttribute('data-fontweight') ||
-								                         span.getAttribute('data-letterspacing') ||
-								                         span.getAttribute('data-lineheight') ||
-								                         span.getAttribute('data-feature-settings');
+								// Check if any other typost attributes remain before unwrapping.
+								// Generic on purpose: the old fixed list missed data-style-id
+								// (a paragraph style), data-fontstyle, data-fitscale/-fitshift
+								// and data-font-variation-settings, so removing the last feature
+								// from a span that also carried one of those unwrapped it and
+								// silently dropped that styling — reachable for a paragraph-
+								// styled run holding only a raw Glyphs Panel alternate.
+								const hasAnyAttributes = Array.prototype.some.call(span.attributes, (attr) =>
+									attr.name.indexOf('data-') === 0);
 
 								if (!hasAnyAttributes && Object.keys(remainingStyleObj).length === 0) {
 									// No attributes or styles remain - safe to unwrap the span
