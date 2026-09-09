@@ -1414,6 +1414,20 @@ function typost_render_admin_template($instance, $presets, $custom_fonts, $adobe
                 </p>
                 <div class="typost-settings-ajax-message" role="status" aria-live="polite" aria-atomic="true"></div>
             </form>
+
+            <hr style="margin: 30px 0;">
+
+            <h3><?php esc_html_e('Editor Tips', 'typography-stylist'); ?></h3>
+            <p><?php esc_html_e('The editor panels open with a dismissible tips notice. Dismissing it is remembered in this browser only. Use this button to show the tips again in this browser.', 'typography-stylist'); ?></p>
+
+            <form method="post" action="" class="typost-reset-tips-form">
+                <p class="submit">
+                    <button type="submit" name="typost_reset_tips" class="button button-secondary">
+                        <?php esc_html_e('Show Editor Tips Again', 'typography-stylist'); ?>
+                    </button>
+                </p>
+                <div class="typost-settings-ajax-message" role="status" aria-live="polite" aria-atomic="true"></div>
+            </form>
             <?php do_action('typost_admin_tab_after_options', $instance); ?>
         </div>
 

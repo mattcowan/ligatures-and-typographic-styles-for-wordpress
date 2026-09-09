@@ -38,18 +38,35 @@
     max-height: 600px;
 }
 
-/* Sticky Notice Wrapper */
+/* Panel notices — ONE spacing rule for every notice inside the editor panels
+   (inline format modal and the block's Quick Feature Toggles), so a notice
+   added later gets the same 16px breathing room on all sides as the existing
+   ones. Only the sticky tips bar below opts out, because it is a full-bleed
+   bar pinned to the top of the panel rather than a card in the flow. */
+.typost-popover-content .components-notice,
+.typost-modal-content .components-notice {
+    margin: 16px 20px;
+}
+
+/* Sticky Notice Wrapper — the dismissible tips bar. Full-bleed and pinned;
+   the bottom margin keeps the first control (or notice) off its border. */
 .typost-sticky-notice-wrapper {
     position: sticky;
     top: 0;
     z-index: 10;
     background: #fff;
     border-bottom: 1px solid #ddd;
+    margin-bottom: 16px;
 }
 
 .typost-sticky-notice-wrapper .components-notice {
     margin: 0;
     border-radius: 0;
+}
+
+/* A notice that directly follows the tips bar already has the bar's gap */
+.typost-sticky-notice-wrapper + .typost-scrollable-content > .components-notice:first-child {
+    margin-top: 0;
 }
 
 .typost-convert-link.components-button.is-link {
@@ -494,10 +511,11 @@
     min-height: 36px;
 }
 
+/* Settings link sits under the Convert button, aligned with it */
 .typost-warning-settings-link {
     margin: 8px 0 0 0;
     font-size: 12px;
-    text-align: right;
+    text-align: left;
 }
 
 .typost-warning-settings-link a {
@@ -506,9 +524,10 @@
 }
 
 /* Word-boundary notice — first thing in the panel, because it reports a
-   problem with the selection the author just made. */
+   problem with the selection the author just made. Spacing comes from the
+   shared panel-notice rule above. */
 .typost-word-boundary-notice {
-    margin: 0 20px 16px 20px;
+    margin: 16px 20px;
 }
 
 .typost-word-boundary-notice p {

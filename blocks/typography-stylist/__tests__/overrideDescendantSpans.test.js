@@ -94,4 +94,44 @@ describe('overrideStylingInDescendantSpans', () => {
 		expect(span.getAttribute('style')).toBe('font-feature-settings: "ss02" 1');
 		expect(span.getAttribute('data-features')).toBe('ss02');
 	});
+
+	describe('raw "tag" 0 in a descendant (Glyphs Panel base cell)', () => {
+		const attrs = { 'data-features': 'swsh' };
+		const style = 'font-feature-settings: "swsh" 1';
+
+		test('applying a tag drops the descendant\'s "tag" 0 so the wrapper\'s "tag" 1 wins', () => {
+			const wrapper = buildWrapper(
+				'<span class="typost-styled" data-features="dlig" data-feature-settings=\'"swsh" 0, "dlig" 1\' style=\'font-feature-settings: "swsh" 0, "dlig" 1; font-size: 40px\'>W</span>onderful',
+				attrs, style
+			);
+			overrideStylingInDescendantSpans(wrapper, attrs, style);
+			const span = wrapper.querySelector('span.typost-styled');
+			expect(span.getAttribute('data-feature-settings')).toBe('"dlig" 1');
+			expect(span.getAttribute('data-features')).toBe('dlig,swsh');
+			expect(span.getAttribute('style')).toBe('font-feature-settings: "dlig" 1, "swsh" 1; font-size: 40px');
+		});
+
+		test('a descendant whose only clause was the "tag" 0 loses the raw attribute', () => {
+			const wrapper = buildWrapper(
+				'<span class="typost-styled" data-feature-settings=\'"swsh" 0\' style=\'font-feature-settings: "swsh" 0\'>W</span>onderful',
+				attrs, style
+			);
+			overrideStylingInDescendantSpans(wrapper, attrs, style);
+			const span = wrapper.querySelector('span.typost-styled');
+			expect(span.hasAttribute('data-feature-settings')).toBe(false);
+			expect(span.getAttribute('data-features')).toBe('swsh');
+			expect(span.getAttribute('style')).toBe('font-feature-settings: "swsh" 1');
+		});
+
+		test('a "tag" 0 for a tag the wrapper does not apply is left alone', () => {
+			const wrapper = buildWrapper(
+				'<span class="typost-styled" data-feature-settings=\'"swsh" 0\' style=\'font-feature-settings: "swsh" 0\'>W</span>onderful',
+				{ 'data-features': 'liga' }, 'font-feature-settings: "liga" 1'
+			);
+			overrideStylingInDescendantSpans(wrapper, { 'data-features': 'liga' }, 'font-feature-settings: "liga" 1');
+			const span = wrapper.querySelector('span.typost-styled');
+			expect(span.getAttribute('data-feature-settings')).toBe('"swsh" 0');
+			expect(span.getAttribute('style')).toBe('font-feature-settings: "swsh" 0, "liga" 1');
+		});
+	});
 });

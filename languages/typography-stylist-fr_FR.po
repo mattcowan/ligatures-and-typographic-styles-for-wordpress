@@ -2213,3 +2213,27 @@ msgstr "Réglages rapides des fonctionnalités"
 #: assets/js/block-editor.js:3102
 msgid "Drag to reposition modal"
 msgstr "Faire glisser pour déplacer la fenêtre"
+
+#: includes/admin-page.php
+msgid "Editor Tips"
+msgstr "Conseils de l’éditeur"
+
+#: includes/admin-page.php
+msgid "The editor panels open with a dismissible tips notice. Dismissing it is remembered in this browser only. Use this button to show the tips again in this browser."
+msgstr "Les panneaux de l’éditeur s’ouvrent avec un avis de conseils que l’on peut fermer. Sa fermeture n’est mémorisée que dans ce navigateur. Utilisez ce bouton pour afficher à nouveau les conseils dans ce navigateur."
+
+#: includes/admin-page.php
+msgid "Show Editor Tips Again"
+msgstr "Afficher à nouveau les conseils de l’éditeur"
+
+#: typography-stylist.php
+msgid "Editor tips will show again the next time you open a Typography Stylist panel in this browser."
+msgstr "Les conseils de l’éditeur s’afficheront à nouveau à la prochaine ouverture d’un panneau Typography Stylist dans ce navigateur."
+
+#: typography-stylist.php
+msgid "Could not reset the editor tips. Your browser blocks site storage."
+msgstr "Impossible de réinitialiser les conseils de l’éditeur. Votre navigateur bloque le stockage du site."
+
+#: blocks/typography-stylist/edit.js
+msgid "Some of the selected text has styling of its own (font, weight, size, spacing, or features). Applying the paragraph style replaces that styling so the whole selection matches the style. Continue?"
+msgstr "Une partie du texte sélectionné possède sa propre mise en forme (police, graisse, taille, espacement ou fonctionnalités). L’application du style de paragraphe remplace cette mise en forme afin que toute la sélection corresponde au style. Continuer ?"

@@ -165,6 +165,15 @@ export function parseInlineFeaturesAtCursor(htmlContent, cursorStart, cursorEnd)
 			if (trimmed) allFeatures.add(trimmed);
 		});
 	}
+	// Tags the raw value turns ON without listing them in data-features (an
+	// indexed alternate, "salt" 2) are active too — otherwise their toggle
+	// reads "off" while the glyph is visibly on and takes two clicks to clear
+	(smallestMatchingSpan.getAttribute('data-feature-settings') || '').split(',').forEach((clause) => {
+		const match = clause.trim().match(/^["']([^"']+)["']\s*(\S*)$/);
+		if (match && match[2].toLowerCase() !== '0' && match[2].toLowerCase() !== 'off') {
+			allFeatures.add(match[1]);
+		}
+	});
 
 	// ALSO check for typost-styled spans INSIDE this one (nested case)
 	// This fixes detection when font-sizing wraps a feature-styled span
@@ -440,14 +449,23 @@ export function parseInlineStylesAtCursor(htmlContent, cursorStart, cursorEnd) {
 				// written by the Glyphs Panel base cell over a block-level
 				// feature) — consumers use these to show the toggle as off
 				// even though the block itself has the feature on
+				// Tags the raw value turns ON without listing them in data-features
+				// (an indexed alternate, "salt" 2, lives in the raw value alone)
+				// count as active, so their toggle reads "on" and switches the
+				// glyph off in one click.
 				const rawSettings = currentSpan.getAttribute('data-feature-settings') || '';
-				const offRegex = /["']([^"']+)["']\s+(?:0|off)\b/gi;
-				let offMatch;
-				while ((offMatch = offRegex.exec(rawSettings))) {
-					if (result.disabledFeatures.indexOf(offMatch[1]) === -1) {
-						result.disabledFeatures.push(offMatch[1]);
+				const rawOnTags = [];
+				rawSettings.split(',').forEach((clause) => {
+					const match = clause.trim().match(/^["']([^"']+)["']\s*(\S*)$/);
+					if (!match) {
+						return;
 					}
-				}
+					const value = match[2].toLowerCase();
+					const list = (value === '0' || value === 'off') ? result.disabledFeatures : rawOnTags;
+					if (list.indexOf(match[1]) === -1) {
+						list.push(match[1]);
+					}
+				});
 				const featuresAttr = currentSpan.getAttribute('data-features');
 				if (featuresAttr) {
 					result.features = featuresAttr.split(',').map(f => f.trim()).filter(f => f);
@@ -466,6 +484,11 @@ export function parseInlineStylesAtCursor(htmlContent, cursorStart, cursorEnd) {
 						result.features = features;
 					}
 				}
+				rawOnTags.forEach((tag) => {
+					if (result.features.indexOf(tag) === -1) {
+						result.features.push(tag);
+					}
+				});
 			}
 
 			// FontId - inherited from first ancestor that has it
@@ -2655,10 +2678,27 @@ export function overrideStylingInDescendantSpans(wrapper, attributes, styleStrin
 			}
 			if (prop === 'font-feature-settings' && appliedFeatures.length > 0) {
 				// Inner declaration replaces the outer one in CSS — merge the
-				// wrapper's tags in so they apply here too
+				// wrapper's tags in so they apply here too. An inner "tag" 0
+				// (a Glyphs Panel base cell) would keep winning over the
+				// wrapper's "tag" 1, so the applied tags' off-clauses go first —
+				// from the declaration AND from the raw attribute it mirrors
+				const pruned = appliedFeatures.reduce((v, tag) => pruneRawFeatureSettings(v, tag, true), value);
+				if (pruned !== value) {
+					value = pruned;
+					const rawAttr = appliedFeatures.reduce(
+						(v, tag) => pruneRawFeatureSettings(v, tag, true),
+						span.getAttribute('data-feature-settings') || ''
+					);
+					if (rawAttr) {
+						span.setAttribute('data-feature-settings', rawAttr);
+					} else {
+						span.removeAttribute('data-feature-settings');
+					}
+				}
 				const missing = appliedFeatures.filter((tag) => value.indexOf(`"${tag}"`) === -1);
 				if (missing.length > 0) {
-					value += ', ' + missing.map((tag) => `"${tag}" 1`).join(', ');
+					const added = missing.map((tag) => `"${tag}" 1`).join(', ');
+					value = value ? `${value}, ${added}` : added;
 					const own = (span.getAttribute('data-features') || '')
 						.split(',')
 						.map((t) => t.trim())
@@ -2969,6 +3009,190 @@ export function stripRedundantFontSizeAttrs(content) {
  */
 export function buildResponsiveClamp(fontSizeMin, fontSizePreferred, fontSizeMax) {
 	return `clamp(${fontSizeMin}px, ${fontSizePreferred / 16}rem + ${((fontSizeMax - fontSizeMin) / (RESPONSIVE_FONT_MAX_VIEWPORT - RESPONSIVE_FONT_MIN_VIEWPORT)) * 100}vw, ${fontSizeMax}px)`;
+}
+
+/**
+ * Attributes and style declarations a paragraph style owns on the text it
+ * is applied to. A style's apply payload is normalized — every one of these
+ * keys arrives with an explicit value ("the applied result has to look like
+ * the style", see the Paragraph Styles module) — so inline styling for any
+ * of them inside the selection would keep beating the style's CSS class in
+ * the cascade. Raw glyph alternates (data-feature-settings) and fit-relative
+ * glyph adjustments (data-fitscale / data-fitshift) are glyph-level choices,
+ * not typography the style describes, and are kept.
+ */
+const PARAGRAPH_STYLE_OWNED_ATTRS = [
+	'data-font-id', 'data-font', 'data-fontweight', 'data-fontstyle',
+	'data-fontsize', 'data-fontsize-min', 'data-fontsize-preferred', 'data-fontsize-max',
+	'data-letterspacing', 'data-lineheight', 'data-features', 'data-font-variation-settings'
+];
+const PARAGRAPH_STYLE_OWNED_PROPS = [
+	'font-family', 'font-weight', 'font-style', 'font-size',
+	'letter-spacing', 'line-height', 'font-feature-settings', 'font-variation-settings'
+];
+
+/**
+ * Typost spans whose styling a selection-scoped paragraph style would have to
+ * override: every span that intersects [start, end) except one that strictly
+ * contains the whole range. A strictly containing span is not affected — the
+ * style's wrapper is created INSIDE it, and an inner element's class beats
+ * the outer span's inline declarations — whereas a span equal to the range
+ * (the merge case) or partly inside it ends up carrying the style itself or
+ * sitting inside its wrapper, where its inline declarations win.
+ *
+ * @param {Element} container Parsed content container
+ * @param {number}  start     Selection start (text offset)
+ * @param {number}  end       Selection end (text offset, exclusive)
+ * @returns {Element[]}
+ */
+function findParagraphStyleAffectedSpans(container, start, end) {
+	const doc = container.ownerDocument;
+	const textMap = buildTextOffsetMap(container, doc);
+	const spans = Array.prototype.slice.call(container.querySelectorAll('span.typost-styled'));
+	return spans.filter((span) => {
+		let spanStart = Infinity;
+		let spanEnd = -Infinity;
+		textMap.forEach((entry) => {
+			if (span.contains(entry.node)) {
+				spanStart = Math.min(spanStart, entry.start);
+				spanEnd = Math.max(spanEnd, entry.end);
+			}
+		});
+		if (spanStart === Infinity) {
+			return false;
+		}
+		const intersects = spanStart < end && spanEnd > start;
+		const strictlyContains = spanStart <= start && spanEnd >= end && (spanStart < start || spanEnd > end);
+		return intersects && !strictlyContains;
+	});
+}
+
+/**
+ * Whether a span carries inline styling a paragraph style owns.
+ *
+ * @param {Element} span
+ * @returns {boolean}
+ */
+function spanHasParagraphStyleOverrides(span) {
+	if (PARAGRAPH_STYLE_OWNED_ATTRS.some((attr) => span.hasAttribute(attr))) {
+		return true;
+	}
+	const styleObj = parseStyleString(span.getAttribute('style'));
+	return PARAGRAPH_STYLE_OWNED_PROPS.some((prop) => {
+		if (!(prop in styleObj)) {
+			return false;
+		}
+		// A declaration that only mirrors a raw glyph alternate (no plain
+		// data-features tags) is glyph-level, not typography the style owns
+		if (prop === 'font-feature-settings' && span.hasAttribute('data-feature-settings')) {
+			return false;
+		}
+		return true;
+	});
+}
+
+/**
+ * Count the spans inside a selection whose own inline styling would beat a
+ * paragraph style applied to that selection. The caller uses a non-zero
+ * count to ask the author before that styling is replaced.
+ *
+ * @since 2.3.0
+ * @param {string} htmlContent Block content
+ * @param {number} start       Selection start (text offset)
+ * @param {number} end         Selection end (text offset, exclusive)
+ * @returns {number}
+ */
+export function countParagraphStyleConflicts(htmlContent, start, end) {
+	if (!htmlContent || !(end > start)) {
+		return 0;
+	}
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
+	const container = doc.body.firstChild;
+	return findParagraphStyleAffectedSpans(container, start, end)
+		.filter(spanHasParagraphStyleOverrides)
+		.length;
+}
+
+/**
+ * Strip the styling a paragraph style owns from one span (everything but its
+ * data-style-id) and from every typost span inside it, so the style's CSS
+ * class renders. Descendants left with nothing are unwrapped. A raw
+ * data-feature-settings value is kept and becomes the whole declaration —
+ * an indexed alternate the author picked in the Glyphs Panel survives.
+ *
+ * @param {Element} target   Span carrying the style (kept), or a descendant
+ * @param {boolean} isTarget True for the span carrying data-style-id
+ */
+function stripParagraphStyleOverridesFromSpan(target, isTarget) {
+	PARAGRAPH_STYLE_OWNED_ATTRS.forEach((attr) => target.removeAttribute(attr));
+	if (!isTarget) {
+		// A nested style inside the selection would keep its own class
+		target.removeAttribute('data-style-id');
+	}
+	const styleObj = parseStyleString(target.getAttribute('style'));
+	PARAGRAPH_STYLE_OWNED_PROPS.forEach((prop) => { delete styleObj[prop]; });
+	const raw = target.getAttribute('data-feature-settings');
+	if (raw) {
+		styleObj['font-feature-settings'] = raw;
+	}
+	const styleOut = buildStyleString(styleObj);
+	if (styleOut) {
+		target.setAttribute('style', styleOut);
+	} else {
+		target.removeAttribute('style');
+	}
+	if (!isTarget) {
+		const hasData = Array.prototype.some.call(target.attributes, (a) => a.name.indexOf('data-') === 0);
+		if (!hasData && !target.getAttribute('style')) {
+			const parent = target.parentNode;
+			while (target.firstChild) {
+				parent.insertBefore(target.firstChild, target);
+			}
+			parent.removeChild(target);
+		}
+	}
+}
+
+/**
+ * After a paragraph style has been applied to a selection, make it win: for
+ * every span carrying that style within [start, end), remove the styling the
+ * style owns from the span itself and from the typost spans inside it.
+ *
+ * @since 2.3.0
+ * @param {string} htmlContent Block content AFTER the style span was applied
+ * @param {number} start       Selection start (text offset)
+ * @param {number} end         Selection end (text offset, exclusive)
+ * @param {number|string} styleId Paragraph style ID that was applied
+ * @returns {{content: string, stripped: number}} stripped = spans changed
+ */
+export function stripParagraphStyleOverrides(htmlContent, start, end, styleId) {
+	if (!htmlContent || !(end > start) || !styleId) {
+		return { content: htmlContent, stripped: 0 };
+	}
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
+	const container = doc.body.firstChild;
+	const id = String(styleId);
+	const targets = findParagraphStyleAffectedSpans(container, start, end)
+		.filter((span) => span.getAttribute('data-style-id') === id);
+	let stripped = 0;
+	targets.forEach((target) => {
+		if (spanHasParagraphStyleOverrides(target)) {
+			stripped++;
+		}
+		stripParagraphStyleOverridesFromSpan(target, true);
+		Array.prototype.slice.call(target.querySelectorAll('span.typost-styled')).forEach((inner) => {
+			if (!inner.parentNode) {
+				return; // unwrapped by an earlier iteration
+			}
+			if (spanHasParagraphStyleOverrides(inner) || inner.hasAttribute('data-style-id')) {
+				stripped++;
+			}
+			stripParagraphStyleOverridesFromSpan(inner, false);
+		});
+	});
+	return { content: container.innerHTML, stripped };
 }
 
 // Expose utility functions for cross-module use (block-editor.js uses CommonJS/Browserify)

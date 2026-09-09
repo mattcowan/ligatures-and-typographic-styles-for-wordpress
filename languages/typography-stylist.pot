@@ -1844,3 +1844,27 @@ msgstr ""
 #: assets/js/block-editor.js:3102
 msgid "Drag to reposition modal"
 msgstr ""
+
+#: includes/admin-page.php
+msgid "Editor Tips"
+msgstr ""
+
+#: includes/admin-page.php
+msgid "The editor panels open with a dismissible tips notice. Dismissing it is remembered in this browser only. Use this button to show the tips again in this browser."
+msgstr ""
+
+#: includes/admin-page.php
+msgid "Show Editor Tips Again"
+msgstr ""
+
+#: typography-stylist.php
+msgid "Editor tips will show again the next time you open a Typography Stylist panel in this browser."
+msgstr ""
+
+#: typography-stylist.php
+msgid "Could not reset the editor tips. Your browser blocks site storage."
+msgstr ""
+
+#: blocks/typography-stylist/edit.js
+msgid "Some of the selected text has styling of its own (font, weight, size, spacing, or features). Applying the paragraph style replaces that styling so the whole selection matches the style. Continue?"
+msgstr ""
