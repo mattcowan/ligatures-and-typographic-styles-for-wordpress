@@ -1214,7 +1214,9 @@ class Typost {
                 'accessibilitySaved' => esc_html__('Accessibility settings saved successfully.', 'typography-stylist'),
                 'accessibilitySaveError' => esc_html__('Failed to save accessibility settings.', 'typography-stylist'),
                 'cacheCleared' => esc_html__('Font cache cleared successfully. Fonts will be re-detected on the next page load.', 'typography-stylist'),
-                'cacheClearError' => esc_html__('Failed to clear the font cache.', 'typography-stylist')
+                'cacheClearError' => esc_html__('Failed to clear the font cache.', 'typography-stylist'),
+                'tipsReset' => esc_html__('Editor tips will show again the next time you open a Typography Stylist panel in this browser.', 'typography-stylist'),
+                'tipsResetError' => esc_html__('Could not reset the editor tips. Your browser blocks site storage.', 'typography-stylist')
             )
         );
 

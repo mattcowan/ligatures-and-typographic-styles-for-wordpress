@@ -30,7 +30,7 @@ import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import { hasBlockSupport } from '@wordpress/blocks';
 import { useSelect, dispatch } from '@wordpress/data';
 import { create, slice as sliceRichText, getTextContent, insert as insertRichText, applyFormat, toHTMLString } from '@wordpress/rich-text';
-import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle } from './utils';
+import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings, countParagraphStyleConflicts, stripParagraphStyleOverrides, applyParagraphStyleBySplit } from './utils';
 import { buildFontOptions, isWpLibraryValue, wpSlugFromValue, adoptWpFont, resolveFontIdFromFamily } from '../../assets/js/font-options.js';
 import { FontPicker } from '../../assets/js/font-picker.js';
 import { calculateResize } from '../../assets/js/modal-drag-resize';
@@ -816,6 +816,7 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 
 	// Derive individual properties from unified detection for backward compatibility
 	const inlineFeaturesAtSelection = inlineStylesAtSelection?.features || [];
+	const inlineDisabledFeaturesAtSelection = inlineStylesAtSelection?.disabledFeatures || [];
 	const inlineFontFamilyAtSelection = inlineStylesAtSelection?.fontId || null;
 
 	// Surface the inline font-id at the cursor to QFT-state consumers (e.g. the
@@ -2595,28 +2596,53 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 			return false;
 		}
 
+		// Text inside the selection that carries styling of its own (a first
+		// letter given a font and a swash, say) would keep that look: its
+		// inline declarations beat the style's CSS class in the cascade, so
+		// the style visibly skipped it. Ask before replacing that styling;
+		// a cancel counts as handled so the style is NOT applied block-level.
+		const conflicts = countParagraphStyleConflicts(content, start, end);
+		if (conflicts > 0) {
+			const proceed = window.confirm(__('Some of the selected text has styling of its own (font, weight, size, spacing, or features). Applying the paragraph style replaces that styling so the whole selection matches the style. Continue?', 'typography-stylist'));
+			if (!proceed) {
+				return true;
+			}
+		}
+
 		// Swapping the style on an existing span is handled by the applier
 		// below: a selection covering the whole span merges the new
 		// data-style-id into it instead of nesting a second span.
 		const attrs = { 'data-style-id': String(id) };
-		const parser = new DOMParser();
-		const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
-		const container = doc.body.firstChild;
-
-		const range = getRangeForOffsets(container, start, end, doc);
-		const validation = validateRangeMatchesSelection(
-			range,
-			capturedSelection?.text || '',
-			capturedSelection?.length || 0
-		);
-
 		let success = false;
 		let newContent = content;
 
-		if (validation.valid) {
-			success = applyOrMergeStyling(range, attrs, '', doc);
-			if (success) {
-				newContent = container.innerHTML;
+		// A selection strictly inside a styled run is split out of it first:
+		// nested inside, the style's wrapper would inherit every property the
+		// style leaves unset (the run's size, spacing, features), and the
+		// strip below must not touch the run's text outside the selection.
+		const split = applyParagraphStyleBySplit(content, start, end, id);
+		if (split.success) {
+			success = true;
+			newContent = split.content;
+		}
+
+		if (!success) {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+			const container = doc.body.firstChild;
+
+			const range = getRangeForOffsets(container, start, end, doc);
+			const validation = validateRangeMatchesSelection(
+				range,
+				capturedSelection?.text || '',
+				capturedSelection?.length || 0
+			);
+
+			if (validation.valid) {
+				success = applyOrMergeStyling(range, attrs, '', doc);
+				if (success) {
+					newContent = container.innerHTML;
+				}
 			}
 		}
 
@@ -2626,6 +2652,12 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 				return false;
 			}
 			newContent = fallbackResult.content;
+		}
+
+		// The author agreed above: strip the styling the style owns from the
+		// styled span and everything inside it, so the class renders.
+		if (conflicts > 0) {
+			newContent = stripParagraphStyleOverrides(newContent, start, end, id).content;
 		}
 
 		setAttributes({ content: newContent });
@@ -3036,31 +3068,45 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 
 					const styledSpans = searchRoot.querySelectorAll('span.typost-styled');
 
-					// Collect spans that have this specific feature
-					const spansToProcess = [];
-					if (searchRoot.classList && searchRoot.classList.contains('typost-styled')) {
-						const dataFeatures = searchRoot.getAttribute('data-features');
-						if (dataFeatures && dataFeatures.includes(featureId)) {
-							spansToProcess.push(searchRoot);
+					// Collect spans that have this specific feature — listed in
+					// data-features, or carried only by the raw value (an indexed
+					// alternate like "salt" 2 lives in data-feature-settings alone).
+					// Exact tag match: "ss01" must not match "ss010".
+					const spanHasFeature = (span) => {
+						const listed = (span.getAttribute('data-features') || '').split(',').map(f => f.trim());
+						if (listed.includes(featureId)) {
+							return true;
 						}
+						const raw = span.getAttribute('data-feature-settings') || '';
+						return raw !== pruneRawFeatureSettings(raw, featureId, false);
+					};
+					const spansToProcess = [];
+					if (searchRoot.classList && searchRoot.classList.contains('typost-styled') && spanHasFeature(searchRoot)) {
+						spansToProcess.push(searchRoot);
 					}
 					styledSpans.forEach(span => {
-						const dataFeatures = span.getAttribute('data-features');
-						if (dataFeatures && dataFeatures.includes(featureId)) {
+						if (spanHasFeature(span)) {
 							spansToProcess.push(span);
 						}
 					});
 
 					// Remove the feature from each span
 					spansToProcess.forEach(span => {
-						const dataFeatures = span.getAttribute('data-features');
-						if (dataFeatures) {
+						const dataFeatures = span.getAttribute('data-features') || '';
+						{
 							// Split features (comma-separated) and remove the target feature
 							const featureList = dataFeatures.split(',').map(f => f.trim()).filter(f => f && f !== featureId);
 
 							// Raw indexed alternates (data-feature-settings, e.g. '"salt" 2')
-							// are independent of the toggled tags and must survive removal
-							const rawSettings = span.getAttribute('data-feature-settings') || '';
+							// for OTHER tags must survive removal; the removed tag's own
+							// clauses go with it, so a raw "on" can't keep it alive and an
+							// "off" clause ("swsh" 0) can't linger on the span
+							const rawSettings = pruneRawFeatureSettings(span.getAttribute('data-feature-settings') || '', featureId, false);
+							if (rawSettings) {
+								span.setAttribute('data-feature-settings', rawSettings);
+							} else {
+								span.removeAttribute('data-feature-settings');
+							}
 
 							if (featureList.length === 0) {
 								// No toggled features left - remove data-features attribute
@@ -3081,13 +3127,15 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 									span.removeAttribute('style');
 								}
 
-								// Check if any other typost attributes remain before unwrapping
-								const hasAnyAttributes = span.getAttribute('data-font-id') ||
-								                         span.getAttribute('data-fontsize') ||
-								                         span.getAttribute('data-fontweight') ||
-								                         span.getAttribute('data-letterspacing') ||
-								                         span.getAttribute('data-lineheight') ||
-								                         span.getAttribute('data-feature-settings');
+								// Check if any other typost attributes remain before unwrapping.
+								// Generic on purpose: the old fixed list missed data-style-id
+								// (a paragraph style), data-fontstyle, data-fitscale/-fitshift
+								// and data-font-variation-settings, so removing the last feature
+								// from a span that also carried one of those unwrapped it and
+								// silently dropped that styling — reachable for a paragraph-
+								// styled run holding only a raw Glyphs Panel alternate.
+								const hasAnyAttributes = Array.prototype.some.call(span.attributes, (attr) =>
+									attr.name.indexOf('data-') === 0);
 
 								if (!hasAnyAttributes && Object.keys(remainingStyleObj).length === 0) {
 									// No attributes or styles remain - safe to unwrap the span
@@ -3466,23 +3514,26 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 								height: `calc(${modalHeight}px - 60px)`,
 								overflowY: 'auto'
 							}}>
-								{/* Usage tips notice — same strings and dismissal flag as the
-								    inline format modal's notice */}
+								{/* Usage tips notice — same strings, dismissal flag, and
+								    sticky wrapper (spacing lives in block-editor.css) as the
+								    inline format modal's notice. Notice does not forward a
+								    style prop, so an inline margin here never rendered. */}
 								{!tipsDismissed && (
-									<Notice
-										status="info"
-										isDismissible={true}
-										onRemove={dismissTips}
-										className="typost-drag-notice"
-										style={{ margin: '0 0 16px 0' }}
-									>
-										<p style={{ margin: 0 }}>
-											{'💡 ' + __('Tip: Drag the title bar to reposition this panel.', 'typography-stylist')}
-										</p>
-										<p style={{ margin: '4px 0 0' }}>
-											{__('Changes apply instantly, press Ctrl+Z (Cmd+Z on Mac) to undo.', 'typography-stylist')}
-										</p>
-									</Notice>
+									<div className="typost-sticky-notice-wrapper">
+										<Notice
+											status="info"
+											isDismissible={true}
+											onRemove={dismissTips}
+											className="typost-drag-notice"
+										>
+											<p style={{ margin: 0 }}>
+												{'💡 ' + __('Tip: Drag the title bar to reposition this panel.', 'typography-stylist')}
+											</p>
+											<p style={{ margin: '4px 0 0' }}>
+												{__('Changes apply instantly, press Ctrl+Z (Cmd+Z on Mac) to undo.', 'typography-stylist')}
+											</p>
+										</Notice>
+									</div>
 								)}
 
 								<div style={{ padding: '0 16px 16px 16px' }}>
@@ -3939,8 +3990,16 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 										>
 										{categoryFeatures.map(feature => {
 											const sampleText = previewText || 'ffi ffl Th AE';
-											// Check both block-level features and inline features at cursor
-											const isActive = features.includes(feature.id) || inlineFeaturesAtSelection.includes(feature.id);
+											// Check both block-level features and inline features at cursor.
+											// A span that turns the tag OFF ("swsh" 0 from the Glyphs Panel
+											// base cell) overrides the block-level state for its text — but
+											// only while there is a selection: a collapsed caret makes the
+											// click toggle the BLOCK-level feature (toggleFeature), so the
+											// checkbox must report that state or it would announce "not
+											// checked" and then strip the feature from the whole block.
+											const hasInlineSelection = !!resolvedApplyRange && resolvedApplyRange.start !== resolvedApplyRange.end;
+											const isActive = inlineFeaturesAtSelection.includes(feature.id) ||
+												(features.includes(feature.id) && !(hasInlineSelection && inlineDisabledFeaturesAtSelection.includes(feature.id)));
 											return (
 												<div key={feature.id} style={{ marginBottom: '12px', borderBottom: '1px solid #ddd', paddingBottom: '8px' }}>
 													<div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>

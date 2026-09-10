@@ -663,13 +663,28 @@
 			// Alternates view = swap semantics: the base cell must CLEAR the
 			// alternate it replaces (a plain insertion would inherit it), and
 			// consecutive clicks must keep replacing the same glyph instead
-			// of appending after it.
+			// of appending after it. The tags shown in this view are the ones
+			// that produce alternates for the character — the base cell turns
+			// them off explicitly, because an alternate that comes from a
+			// block-level feature (or a paragraph style) survives a mere
+			// inline-format reset.
 			var inAlternatesView = altCps !== null;
+			var isBaseGlyph = inAlternatesView && !tag;
+			var clearTags = [];
+			if (isBaseGlyph) {
+				items.forEach(function(gridItem) {
+					var gridTag = itemFeatureTag(gridItem);
+					if (gridTag && clearTags.indexOf(gridTag) === -1) {
+						clearTags.push(gridTag);
+					}
+				});
+			}
 			var payload = lib.buildInsertionPayload({
 				text: text,
 				featureTag: tag,
 				featureIndex: item.altIndex || 1,
-				isBaseGlyph: inAlternatesView && !tag,
+				isBaseGlyph: isBaseGlyph,
+				clearTags: clearTags,
 				panelFontId: selectedFont ? selectedFont.fontId : 0,
 				panelFontFamily: (selectedFont && !selectedFont.fontId) ? (selectedFont.cssFamily || '"' + selectedFont.family + '"') : '',
 				contextFontId: context.fontId || 0,

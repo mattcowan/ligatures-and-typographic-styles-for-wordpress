@@ -58,10 +58,12 @@
 	color: #757575;
 }
 
+/* Settings link sits under the Convert button, aligned with it (matches the
+   inline editor's notice) */
 .typost-glyphs-a11y-settings {
 	margin: 8px 0 0 0;
 	font-size: 12px;
-	text-align: right;
+	text-align: left;
 }
 
 /* Header: font selector + target indicator */

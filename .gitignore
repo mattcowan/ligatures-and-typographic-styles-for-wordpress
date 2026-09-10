@@ -44,3 +44,7 @@ playwright-report/
 playwright/.cache/
 # Demo videos (recorded locally, hosted elsewhere)
 docs/media/
+
+# Private working notes (handoff reports, review write-ups, scratch analysis).
+# Never committed and never distributed — see .distignore for the zip side.
+/private/

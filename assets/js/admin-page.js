@@ -2158,4 +2158,19 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    // Show editor tips again (Options tab). The dismissal lives in this
+    // browser's localStorage (the editor panels read the same key), so the
+    // reset is a client-side clear — nothing is sent to the server.
+    $('.typost-reset-tips-form').on('submit', function(e) {
+        e.preventDefault();
+
+        var $form = $(this);
+        try {
+            window.localStorage.removeItem('typography_stylist_hide_modal_tips');
+            settingsFormMessage($form, 'success', typostAdmin.strings.tipsReset);
+        } catch (err) {
+            settingsFormMessage($form, 'error', typostAdmin.strings.tipsResetError);
+        }
+    });
 });

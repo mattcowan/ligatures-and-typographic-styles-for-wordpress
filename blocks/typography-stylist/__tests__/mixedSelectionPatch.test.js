@@ -135,6 +135,57 @@ describe('patchTypostFormatAttributes', () => {
 		expect(patched.style).toBe('font-feature-settings: "salt" 2, "liga" 1');
 	});
 
+	describe('raw "off" clauses from the Glyphs Panel base cell', () => {
+		// The base cell writes "swsh" 0 over a block-level swash so the plain
+		// glyph shows; the popover toggle must be able to turn swsh back on
+		const BASE = {
+			'data-features': 'dlig',
+			'data-feature-settings': '"swsh" 0, "dlig" 1',
+			'data-font-id': '1',
+			style: 'font-feature-settings: "swsh" 0, "dlig" 1; font-family: var(--font-1)'
+		};
+
+		test('enabling a tag drops its "tag" 0 clause and rebuilds the declaration', () => {
+			const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'swsh', enabled: true }] };
+			const patched = patchTypostFormatAttributes(BASE, patch);
+			expect(patched['data-features']).toBe('dlig,swsh');
+			expect(patched['data-feature-settings']).toBe('"dlig" 1');
+			expect(patched.style).toBe('font-feature-settings: "dlig" 1, "swsh" 1; font-family: var(--font-1)');
+		});
+
+		test('disabling a tag the raw value keeps on drops its clause too', () => {
+			const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'dlig', enabled: false }] };
+			const patched = patchTypostFormatAttributes(BASE, patch);
+			expect(patched['data-features']).toBeUndefined();
+			expect(patched['data-feature-settings']).toBe('"swsh" 0');
+			expect(patched.style).toBe('font-feature-settings: "swsh" 0; font-family: var(--font-1)');
+		});
+
+		test('the raw attribute is removed once every clause is gone', () => {
+			const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'swsh', enabled: true }, { tag: 'dlig', enabled: false }] };
+			const patched = patchTypostFormatAttributes(BASE, patch);
+			expect(patched['data-feature-settings']).toBeUndefined();
+			expect(patched['data-features']).toBe('swsh');
+			expect(patched.style).toBe('font-feature-settings: "swsh" 1; font-family: var(--font-1)');
+		});
+
+		test('disabling an indexed alternate by its tag removes the raw clause', () => {
+			const indexed = { 'data-feature-settings': '"salt" 2, "liga" 1', 'data-features': 'liga', style: 'font-feature-settings: "salt" 2, "liga" 1' };
+			const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'salt', enabled: false }] };
+			const patched = patchTypostFormatAttributes(indexed, patch);
+			expect(patched['data-feature-settings']).toBe('"liga" 1');
+			expect(patched.style).toBe('font-feature-settings: "liga" 1');
+		});
+
+		test('enabling a tag keeps its indexed "on" clause (the more specific setting)', () => {
+			const indexed = { 'data-feature-settings': '"salt" 2', style: 'font-feature-settings: "salt" 2' };
+			const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'salt', enabled: true }] };
+			const patched = patchTypostFormatAttributes(indexed, patch);
+			expect(patched['data-feature-settings']).toBe('"salt" 2');
+			expect(patched.style).toBe('font-feature-settings: "salt" 2');
+		});
+	});
+
 	test('removing the last feature drops the declaration but keeps other props', () => {
 		const patch = { dataAttrs: {}, styleDecls: {}, featureToggles: [{ tag: 'swsh', enabled: false }] };
 		const patched = patchTypostFormatAttributes(SWSH, patch);

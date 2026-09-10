@@ -6,7 +6,14 @@
  * letterSpacing, lineHeight, plus span boundaries (spanText, spanStart, spanEnd).
  */
 
-import { parseInlineStylesAtCursor } from '../utils';
+import { parseInlineStylesAtCursor, parseInlineFeaturesAtCursor } from '../utils';
+
+describe('parseInlineFeaturesAtCursor — raw feature settings', () => {
+	it('counts a raw-only indexed alternate as active and ignores "tag" 0', () => {
+		const html = '<span class="typost-styled" data-features="dlig" data-feature-settings="&quot;salt&quot; 2, &quot;swsh&quot; 0, &quot;dlig&quot; 1" style="font-feature-settings: &quot;salt&quot; 2, &quot;swsh&quot; 0, &quot;dlig&quot; 1">W</span>onderful';
+		expect(parseInlineFeaturesAtCursor(html, 0, 1)).toEqual(['dlig', 'salt']);
+	});
+});
 
 describe('Typography Stylist - parseInlineStylesAtCursor', () => {
 
@@ -98,6 +105,36 @@ describe('Typography Stylist - parseInlineStylesAtCursor', () => {
 
 		expect(result).not.toBeNull();
 		expect(result.features).toEqual(['ss01', 'liga', 'swsh']);
+	});
+
+	it('should report tags the span turns off via data-feature-settings as disabledFeatures', () => {
+		// The Glyphs Panel base cell writes "swsh" 0 over a block-level swash
+		const html = '<span class="typost-styled" data-features="dlig" data-feature-settings="&quot;swsh&quot; 0, &quot;dlig&quot; 1" style="font-feature-settings: &quot;swsh&quot; 0, &quot;dlig&quot; 1">W</span>onderful';
+		const result = parseInlineStylesAtCursor(html, 0, 1);
+
+		expect(result).not.toBeNull();
+		expect(result.features).toEqual(['dlig']);
+		expect(result.disabledFeatures).toEqual(['swsh']);
+	});
+
+	it('should report an empty disabledFeatures list when nothing is turned off', () => {
+		const html = '<span class="typost-styled" data-features="liga" data-feature-settings="&quot;salt&quot; 2, &quot;liga&quot; 1" style="font-feature-settings: &quot;salt&quot; 2, &quot;liga&quot; 1">Text</span>';
+		const result = parseInlineStylesAtCursor(html, 2, 2);
+
+		expect(result.disabledFeatures).toEqual([]);
+		// The indexed alternate is active even though data-features omits it
+		expect(result.features).toEqual(['liga', 'salt']);
+	});
+
+	it('should count a raw-only indexed alternate as an active feature', () => {
+		// The Glyphs Panel writes "salt" 2 to data-feature-settings alone when
+		// no other feature is active — without this the toggle read "off"
+		// while the alternate was visibly on
+		const html = '<span class="typost-styled" data-feature-settings="&quot;salt&quot; 2" style="font-feature-settings: &quot;salt&quot; 2">a</span>bc';
+		const result = parseInlineStylesAtCursor(html, 0, 1);
+
+		expect(result.features).toEqual(['salt']);
+		expect(result.disabledFeatures).toEqual([]);
 	});
 
 	// ===== STYLE FALLBACK (BACKWARD COMPATIBILITY) =====

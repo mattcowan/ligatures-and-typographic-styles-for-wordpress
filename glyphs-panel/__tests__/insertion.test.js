@@ -226,6 +226,97 @@ describe('buildInsertionPayload', () => {
 			});
 			expect(payload).toEqual({ text: '&', attributes: null });
 		});
+
+		describe('block-level alternate features (clearTags)', () => {
+			test('alternate tag active in context is explicitly disabled ("tag" 0)', () => {
+				// Bug (2026-09-09): a typost/block with features [swsh, dlig]
+				// re-declared swsh on the base-cell span, so the W stayed swashed.
+				// Rule 5 only clears an INLINE format; a block-level feature
+				// (or one inherited through CSS) must be turned off explicitly.
+				const payload = buildInsertionPayload({
+					text: 'W',
+					featureTag: null,
+					isBaseGlyph: true,
+					clearTags: ['swsh'],
+					panelFontId: 1,
+					contextFontId: 1,
+					contextFeatures: ['swsh'],
+					contextFontWeight: ''
+				});
+				expect(payload.attributes['data-features']).toBeUndefined();
+				expect(payload.attributes['data-feature-settings']).toBe('"swsh" 0');
+				expect(payload.attributes['data-font-id']).toBe('1');
+				expect(payload.attributes.style).toBe('font-feature-settings: "swsh" 0; font-family: var(--font-1)');
+			});
+
+			test('other context features are kept at 1 while the alternate tags go to 0', () => {
+				const payload = buildInsertionPayload({
+					text: 'W',
+					featureTag: null,
+					isBaseGlyph: true,
+					clearTags: ['swsh', 'ss01'],
+					panelFontId: 1,
+					contextFontId: 1,
+					contextFeatures: ['swsh', 'dlig'],
+					contextFontWeight: '700'
+				});
+				// data-features lists only the kept tags, so the popover's
+				// toggles do not show swsh as on
+				expect(payload.attributes['data-features']).toBe('dlig');
+				expect(payload.attributes['data-feature-settings']).toBe('"swsh" 0, "dlig" 1');
+				expect(payload.attributes['data-fontweight']).toBe('700');
+				expect(payload.attributes.style).toBe('font-feature-settings: "swsh" 0, "dlig" 1; font-family: var(--font-1); font-weight: 700');
+			});
+
+			test('an indexed alternate (salt N) in context is zeroed by its tag', () => {
+				// The alternates view lists salt as a tag regardless of index;
+				// the base cell turns the whole feature off, not one index
+				const payload = buildInsertionPayload({
+					text: 'a',
+					featureTag: null,
+					isBaseGlyph: true,
+					clearTags: ['salt', 'swsh'],
+					panelFontId: 40,
+					contextFontId: 40,
+					contextFeatures: ['salt', 'liga'],
+					contextFontWeight: ''
+				});
+				expect(payload.attributes['data-features']).toBe('liga');
+				expect(payload.attributes['data-feature-settings']).toBe('"salt" 0, "liga" 1');
+				expect(payload.attributes.style).toContain('font-feature-settings: "salt" 0, "liga" 1');
+			});
+
+			test('clearTags not active in context are not written (no needless 0 values)', () => {
+				const payload = buildInsertionPayload({
+					text: 'W',
+					featureTag: null,
+					isBaseGlyph: true,
+					clearTags: ['swsh', 'ss01'],
+					panelFontId: 40,
+					contextFontId: 40,
+					contextFeatures: ['liga'],
+					contextFontWeight: ''
+				});
+				expect(payload.attributes['data-features']).toBe('liga');
+				expect(payload.attributes['data-feature-settings']).toBeUndefined();
+				expect(payload.attributes.style).toBe('font-feature-settings: "liga" 1; font-family: var(--font-40)');
+			});
+
+			test('clearTags is ignored for non-base insertions', () => {
+				const payload = buildInsertionPayload({
+					text: 'W',
+					featureTag: 'swsh',
+					isBaseGlyph: false,
+					clearTags: ['swsh'],
+					panelFontId: 40,
+					contextFontId: 40,
+					contextFeatures: ['dlig'],
+					contextFontWeight: ''
+				});
+				expect(payload.attributes['data-features']).toBe('swsh,dlig');
+				expect(payload.attributes['data-feature-settings']).toBeUndefined();
+			});
+		});
 	});
 
 	describe('WP Font Library fonts (panelFontFamily, no numeric id)', () => {
