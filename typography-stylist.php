@@ -601,6 +601,9 @@ class Typost {
                     }
                 }
 
+                // Method 5: Fonts referenced indirectly (paragraph style classes, extensions)
+                $this->collect_extension_font_ids($content_to_check, $used_fonts);
+
                 // Remove duplicates and empty values
                 $used_fonts = array_filter(array_unique($used_fonts));
 
@@ -651,6 +654,9 @@ class Typost {
                             $used_fonts[] = 'id:' . $font_id;
                         }
                     }
+
+                    // Method 5: Fonts referenced indirectly (paragraph style classes, extensions)
+                    $this->collect_extension_font_ids($combined_content, $used_fonts);
                 }
 
                 // Remove duplicates and empty values
@@ -700,6 +706,9 @@ class Typost {
                             $fonts[] = $font_family;
                         }
                     }
+
+                    // Fonts referenced indirectly (paragraph style ids on spans)
+                    $this->collect_extension_font_ids($content, $fonts);
                 }
             }
 
@@ -3154,17 +3163,7 @@ class Typost {
         delete_transient('typost_css_variables');
 
         // Clear per-page font caches (all cached variations)
-        // Direct database call is required here for bulk deletion of transients with wildcard patterns.
-        // No caching needed as this is a delete operation.
-        global $wpdb;
-        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_font_css_') . '%'));
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_font_css_') . '%'));
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_has_styled_') . '%'));
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_has_styled_') . '%'));
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_used_fonts_') . '%'));
-        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_used_fonts_') . '%'));
-        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $this->clear_font_detection_cache();
 
         // Clear editor data cache for all users
         $this->invalidate_editor_data_cache();
@@ -3178,6 +3177,32 @@ class Typost {
          * @since 2.0.0
          */
         do_action('typost_cache_clear');
+    }
+
+    /**
+     * Clear the per-page font detection caches.
+     *
+     * Drops every cached "which fonts does this page use" answer (per-post
+     * and archive `typost_used_fonts_*`, `typost_has_styled_*`) and the
+     * per-page font CSS built from them. Public so modules whose data feeds
+     * detection through `typost_content_font_ids` (paragraph styles) can
+     * invalidate it when that data changes — a style that switches font
+     * would otherwise keep serving the old @font-face for up to 12 hours.
+     *
+     * @since 2.3.0
+     */
+    public function clear_font_detection_cache() {
+        // Direct database call is required here for bulk deletion of transients with wildcard patterns.
+        // No caching needed as this is a delete operation.
+        global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_font_css_') . '%'));
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_font_css_') . '%'));
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_has_styled_') . '%'));
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_has_styled_') . '%'));
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_typost_used_fonts_') . '%'));
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('_transient_timeout_typost_used_fonts_') . '%'));
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     }
 
     /**
@@ -5673,6 +5698,44 @@ class Typost {
      * @param array $used_font_ids Array of font IDs found in content (e.g., [16, 32])
      * @return array Expanded array including replacement targets (e.g., [16, 29, 32])
      */
+    /**
+     * Add font IDs that the built-in content scan cannot see.
+     *
+     * The scan recognises `data-font`, `data-font-id` and `--font-N`. Content
+     * styled only through a paragraph style class (`data-style-id="N"` on a
+     * span, `typost-ps-N` on a block) names no font at all — the font lives in
+     * the style definition — so without this hook the frontend never printed
+     * its @font-face. Modules and extensions report those IDs through the
+     * `typost_content_font_ids` filter; the IDs are appended in the scan's
+     * `id:N` form.
+     *
+     * @since 2.3.0
+     * @param string $content     The content being scanned (raw + rendered).
+     * @param array  $used_fonts  Font references collected so far (by reference).
+     */
+    private function collect_extension_font_ids($content, array &$used_fonts) {
+        if (!is_string($content) || '' === $content) {
+            return;
+        }
+        /**
+         * Filters font IDs referenced indirectly by a piece of content.
+         *
+         * @since 2.3.0
+         * @param int[]  $ids     Font IDs found so far (empty on entry).
+         * @param string $content The content being scanned.
+         */
+        $ids = apply_filters('typost_content_font_ids', array(), $content);
+        if (!is_array($ids)) {
+            return;
+        }
+        foreach ($ids as $id) {
+            $id = intval($id);
+            if ($id > 0) {
+                $used_fonts[] = 'id:' . $id;
+            }
+        }
+    }
+
     /**
      * Get font IDs that must always be loaded on the frontend
      *
