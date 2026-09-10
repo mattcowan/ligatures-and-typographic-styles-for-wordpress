@@ -3360,6 +3360,29 @@ export function findParagraphStyleByClass(styleClass, styles) {
 }
 
 /**
+ * Does a block's `styleClass` point at a paragraph style that no longer
+ * exists?
+ *
+ * save.js emits no inline styles under a styleClass and the class rule is
+ * gone once the style is deleted, so such a block renders at the theme's
+ * defaults on the frontend while the editor still shows its attribute copy.
+ * The editor clears the orphaned class so the block behaves as detached:
+ * both sides then render the attributes inline. Only decided when the style
+ * list is actually available — with the module absent there is nothing to
+ * compare against and every styleClass would look orphaned.
+ *
+ * @param {string}     styleClass Block attribute.
+ * @param {Array|null} styles     window.typostData.paragraphStyles, when present.
+ * @return {boolean}
+ */
+export function isOrphanStyleClass(styleClass, styles) {
+	if (!styleClass || !Array.isArray(styles)) {
+		return false;
+	}
+	return findParagraphStyleByClass(styleClass, styles) === null;
+}
+
+/**
  * Which style-owned block attributes differ from the paragraph style they
  * were copied from.
  *

@@ -376,6 +376,19 @@
 	}
 
 	/**
+	 * The selector list for one style id (numeric or legacy string).
+	 *
+	 * @param {number|string} id Style id.
+	 * @return {string} Comma+newline separated selectors.
+	 */
+	function selectorSet(id) {
+		var cls = '.typost-ps-' + id;
+		return cls + ',\n' +
+			'.typost-styled' + cls + cls + cls + cls + cls + ',\n' +
+			'.typost-styled[data-style-id="' + id + '"][data-style-id][data-style-id][data-style-id][data-style-id]';
+	}
+
+	/**
 	 * Build the CSS rule block for one stored style — the JS twin of PHP
 	 * generate_style_css() in paragraph-styles.php.
 	 *
@@ -393,19 +406,6 @@
 	 * @param {Object} style Stored style ({id, legacyId?, properties}).
 	 * @return {string} CSS rule block, or '' when nothing to emit.
 	 */
-	/**
-	 * The selector list for one style id (numeric or legacy string).
-	 *
-	 * @param {number|string} id Style id.
-	 * @return {string} Comma+newline separated selectors.
-	 */
-	function selectorSet(id) {
-		var cls = '.typost-ps-' + id;
-		return cls + ',\n' +
-			'.typost-styled' + cls + cls + cls + cls + cls + ',\n' +
-			'.typost-styled[data-style-id="' + id + '"][data-style-id][data-style-id][data-style-id][data-style-id]';
-	}
-
 	function buildStyleCssBlock(style) {
 		if (!style || !style.id || !style.properties) return '';
 		var props = style.properties;

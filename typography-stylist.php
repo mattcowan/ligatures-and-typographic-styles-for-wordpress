@@ -5688,17 +5688,6 @@ class Typost {
     }
 
     /**
-     * Resolve font IDs through replacement chain
-     *
-     * Takes an array of used font IDs and returns an expanded array that includes
-     * both the original IDs and any fonts they've been replaced with.
-     * This ensures that when content references a deleted font ID, the replacement
-     * font's assets are actually loaded.
-     *
-     * @param array $used_font_ids Array of font IDs found in content (e.g., [16, 32])
-     * @return array Expanded array including replacement targets (e.g., [16, 29, 32])
-     */
-    /**
      * Add font IDs that the built-in content scan cannot see.
      *
      * The scan recognises `data-font`, `data-font-id` and `--font-N`. Content
@@ -5765,6 +5754,17 @@ class Typost {
         return $this->forced_font_ids;
     }
 
+    /**
+     * Resolve font IDs through replacement chain
+     *
+     * Takes an array of used font IDs and returns an expanded array that includes
+     * both the original IDs and any fonts they've been replaced with.
+     * This ensures that when content references a deleted font ID, the replacement
+     * font's assets are actually loaded.
+     *
+     * @param array $used_font_ids Array of font IDs found in content (e.g., [16, 32])
+     * @return array Expanded array including replacement targets (e.g., [16, 29, 32])
+     */
     private function resolve_used_font_replacements($used_font_ids) {
         return $this->font_sources()->resolve_used_font_replacements($used_font_ids);
     }

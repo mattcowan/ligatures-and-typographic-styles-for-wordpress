@@ -30,7 +30,7 @@ import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import { hasBlockSupport } from '@wordpress/blocks';
 import { useSelect, dispatch } from '@wordpress/data';
 import { create, slice as sliceRichText, getTextContent, insert as insertRichText, applyFormat, toHTMLString } from '@wordpress/rich-text';
-import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings, countParagraphStyleConflicts, stripParagraphStyleOverrides, applyParagraphStyleBySplit, installModalFocusGuard, findParagraphStyleByClass, stylePropertyOverrides, adjustInsertionRangeForSwap } from './utils';
+import { buildTextOffsetMap, parseInlineStylesAtCursor, updateSpanPropertyInPlace, splitSpanAndApply, detectBlockComputedFont, applyOrMergeStyling, validateRangeMatchesSelection, applyStylingSafeStringMethod, isValidFontSizeRange, debounce, removePropertyFromSelection, getFilteredWeightOptions as getFilteredWeightOptionsUtil, getClosestWeight as getClosestWeightUtil, ALL_WEIGHT_OPTIONS, filterFeaturesByVisibility, resolveQftInsertionRange, resolveQftApplyRange, resolveBlockSelectionRange, buildQftEditorState, filterToolbarButtons, mergeInsertionFormatAttributes, parseStyleString, buildStyleString, detectEmItalicAtRange, detectStrongBoldAtRange, splitContentIntoLines, computeFitRatio, wrapFitLines, unwrapFitLines, stripRedundantFontSizeAttrs, sanitizeFontVariationSettings, resolveBlockFontFamilyStyle, pruneRawFeatureSettings, countParagraphStyleConflicts, stripParagraphStyleOverrides, applyParagraphStyleBySplit, installModalFocusGuard, findParagraphStyleByClass, stylePropertyOverrides, adjustInsertionRangeForSwap, isOrphanStyleClass } from './utils';
 import { buildFontOptions, isWpLibraryValue, wpSlugFromValue, adoptWpFont, resolveFontIdFromFamily } from '../../assets/js/font-options.js';
 import { FontPicker } from '../../assets/js/font-picker.js';
 import { calculateResize } from '../../assets/js/modal-drag-resize';
@@ -3311,6 +3311,16 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 		() => findParagraphStyleByClass(styleClass, window.typostData && window.typostData.paragraphStyles),
 		[styleClass, paragraphStylesVersion]
 	);
+	// A styleClass whose style was deleted leaves the editor and the frontend
+	// permanently apart: save.js emits no inline styles under a styleClass and
+	// the class rule is gone, so the frontend falls back to the theme while the
+	// editor still shows the attribute copy. Drop the orphaned class so the
+	// block behaves as detached and both sides render the attributes inline.
+	useEffect(() => {
+		if (isOrphanStyleClass(styleClass, window.typostData && window.typostData.paragraphStyles)) {
+			setAttributes({ styleClass: '' });
+		}
+	}, [styleClass, paragraphStylesVersion, setAttributes]);
 	const styleOverrides = useMemo(
 		() => activeParagraphStyle
 			? stylePropertyOverrides({ fontId, fontWeight, fontStyle, fontSize, fontSizeMin, fontSizePreferred, fontSizeMax, fitMaxSize, letterSpacing, lineHeight, features, fontVariationSettings }, activeParagraphStyle.properties)
@@ -3369,7 +3379,9 @@ export default function Edit({ attributes, setAttributes, clientId, isSelected }
 
 		// A fixed px size (a style created from the inline editor) has no
 		// block-native control; render it inline when it is not coming from
-		// the style's class (an edit in progress, or the style was deleted).
+		// the style's class (an edit in progress, or a detached block that
+		// kept the size — an orphaned styleClass is cleared above, so the
+		// frontend renders the same inline size).
 		if ((!styleOverrides || styleOverrides.fontSize) && /^\d+(\.\d+)?$/.test(String(fontSize))) {
 			styles.fontSize = `${fontSize}px`;
 		}

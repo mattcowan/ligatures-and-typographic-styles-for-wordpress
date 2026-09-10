@@ -450,12 +450,6 @@ final class Typost_Paragraph_Styles {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Add paragraph styles to the editor localized data.
-	 *
-	 * @param array $data Existing editor data.
-	 * @return array Modified editor data.
-	 */
-	/**
 	 * Report the fonts that paragraph style references in content resolve to.
 	 *
 	 * A span applied from the block editor is `<span class="typost-styled"
@@ -481,10 +475,12 @@ final class Typost_Paragraph_Styles {
 		}
 
 		$style_refs = array();
-		if ( preg_match_all( '/data-style-id=["\'\\\\]*([A-Za-z0-9_]+)/', $content, $matches ) ) {
+		// Same token class as findParagraphStyleByClass() and the legacyId
+		// validators: a hyphenated legacy id must not truncate at the hyphen.
+		if ( preg_match_all( '/data-style-id=["\'\\\\]*([A-Za-z0-9_-]+)/', $content, $matches ) ) {
 			$style_refs = $matches[1];
 		}
-		if ( preg_match_all( '/typost-ps-([A-Za-z0-9_]+)/', $content, $matches ) ) {
+		if ( preg_match_all( '/typost-ps-([A-Za-z0-9_-]+)/', $content, $matches ) ) {
 			$style_refs = array_merge( $style_refs, $matches[1] );
 		}
 		if ( empty( $style_refs ) ) {
@@ -507,6 +503,12 @@ final class Typost_Paragraph_Styles {
 		return array_values( array_unique( array_map( 'intval', $ids ) ) );
 	}
 
+	/**
+	 * Add paragraph styles to the editor localized data.
+	 *
+	 * @param array $data Existing editor data.
+	 * @return array Modified editor data.
+	 */
 	public function add_editor_data( $data ) {
 		$data['paragraphStyles']        = $this->get_styles();
 		$data['paragraphStylesOptions'] = array(

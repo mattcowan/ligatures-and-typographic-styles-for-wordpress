@@ -1,7 +1,7 @@
 /**
  * Tests for class-based rendering of a styled block in the editor (PS-4, PS-5).
  */
-import { findParagraphStyleByClass, stylePropertyOverrides } from '../utils';
+import { findParagraphStyleByClass, stylePropertyOverrides, isOrphanStyleClass } from '../utils';
 
 const styles = [
 	{ id: 3, name: 'Body Garamond', properties: { fontId: 37, fontWeight: '400', fontSize: '16', lineHeight: 1.6000000000000001, features: ['onum', 'liga'] } },
@@ -16,6 +16,22 @@ describe('findParagraphStyleByClass', () => {
 		expect(findParagraphStyleByClass('typost-ps-999', styles)).toBeNull();
 		expect(findParagraphStyleByClass('', styles)).toBeNull();
 		expect(findParagraphStyleByClass('typost-ps-4', undefined)).toBeNull();
+	});
+});
+
+describe('isOrphanStyleClass', () => {
+	test('true only when the style list is known and the class names no style in it', () => {
+		expect(isOrphanStyleClass('typost-ps-999', styles)).toBe(true);
+		expect(isOrphanStyleClass('typost-ps-4', styles)).toBe(false);
+		expect(isOrphanStyleClass('typost-ps-ps_1709312345_123', styles)).toBe(false);
+	});
+
+	test('never decides without a style list (module absent) or without a class', () => {
+		expect(isOrphanStyleClass('typost-ps-999', undefined)).toBe(false);
+		expect(isOrphanStyleClass('typost-ps-999', null)).toBe(false);
+		expect(isOrphanStyleClass('', styles)).toBe(false);
+		// An empty list is a real answer: every class is orphaned.
+		expect(isOrphanStyleClass('typost-ps-4', [])).toBe(true);
 	});
 });
 

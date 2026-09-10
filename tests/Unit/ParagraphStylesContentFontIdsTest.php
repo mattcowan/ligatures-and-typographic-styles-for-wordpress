@@ -15,6 +15,7 @@ class ParagraphStylesContentFontIdsTest extends TestCase {
         ['id' => 5, 'name' => 'Script Accent', 'properties' => ['fontId' => 40]],
         ['id' => 6, 'name' => 'No font', 'properties' => ['fontWeight' => '400']],
         ['id' => 9, 'legacyId' => 'ps_1709312345_123', 'name' => 'Migrated', 'properties' => ['fontId' => 37]],
+        ['id' => 10, 'legacyId' => 'ps-legacy-7', 'name' => 'Hyphenated', 'properties' => ['fontId' => 41]],
     ];
 
     private function freshInstance($stubOption = true) {
@@ -60,6 +61,12 @@ class ParagraphStylesContentFontIdsTest extends TestCase {
         $module = $this->freshInstance();
         $ids = $module->font_ids_from_content([], '<span class="typost-styled" data-style-id="ps_1709312345_123">Old</span>');
         $this->assertSame([37], $ids);
+    }
+
+    public function test_hyphenated_legacy_ids_are_not_truncated_at_the_hyphen() {
+        $module = $this->freshInstance();
+        $this->assertSame([41], $module->font_ids_from_content([], '<span class="typost-styled" data-style-id="ps-legacy-7">a</span>'));
+        $this->assertSame([41], $module->font_ids_from_content([], '<h2 class="typost-styled typost-ps-ps-legacy-7">b</h2>'));
     }
 
     public function test_styles_without_a_font_and_unknown_ids_add_nothing() {
